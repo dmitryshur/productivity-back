@@ -1,73 +1,66 @@
-use actix_web::{web::Json, HttpRequest};
-use serde::Serialize;
+use crate::actors::db_actor::TodoCreateMessage;
+use crate::AppState;
+use actix_web::{
+    web::{Data, Json},
+    HttpRequest,
+};
+use chrono::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 
-#[derive(Serialize, Debug)]
-pub struct Todo {
+#[derive(Deserialize, Debug, Clone)]
+pub struct TodoCreateRequest {
+    user_id: i32,
     title: String,
+    body: Option<String>,
 }
 
-pub async fn todo_get(_request: HttpRequest) -> Result<Json<Todo>, ()> {
-    let result = Todo {
-        title: "get".to_owned(),
-    };
-
-    Ok(Json(result))
+#[derive(Serialize)]
+pub struct TodoCreateResponse {
+    id: i32,
+    creation_date: DateTime<Utc>,
 }
 
-pub async fn todo_add(_request: HttpRequest) -> Result<Json<Todo>, ()> {
-    let result = Todo {
-        title: "add".to_owned(),
-    };
-
-    Ok(Json(result))
+#[derive(Deserialize, Debug)]
+pub struct TodoGetRequest {
+    user_id: i32,
+    offset: Option<i32>,
+    limit: Option<i32>,
 }
 
-pub async fn todo_edit(_request: HttpRequest) -> Result<Json<Todo>, ()> {
-    let result = Todo {
-        title: "edit".to_owned(),
-    };
+pub async fn todo_create(
+    request: Json<TodoCreateRequest>,
+    state: Data<AppState>,
+) -> Result<Json<TodoCreateResponse>, ()> {
+    let request_json = request.into_inner().clone();
+    // TODO if an error returns, map it to a custom error message
+    let rows = state
+        .db_actor
+        .send(TodoCreateMessage::new(
+            request_json.user_id,
+            request_json.title,
+            request_json.body,
+        ))
+        .await
+        .map_err(|_| ())
+        .and_then(|result| result);
 
-    Ok(Json(result))
-}
+    if let Ok(rows) = rows {
+        let row = &rows[0];
 
-pub async fn todo_delete(_request: HttpRequest) -> Result<Json<Todo>, ()> {
-    let result = Todo {
-        title: "delete".to_owned(),
-    };
+        let response_json = TodoCreateResponse {
+            id: row.get("id"),
+            creation_date: row.get("creation_date"),
+        };
 
-    Ok(Json(result))
+        return Ok(Json(response_json));
+    }
+
+    Err(())
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use actix_web::test;
-
-    #[actix_rt::test]
-    async fn test_todo_get() {
-        let request = test::TestRequest::get().to_http_request();
-        let response = todo_get(request).await.unwrap();
-        assert_eq!(response.title, "get".to_owned());
-    }
-
-    #[actix_rt::test]
-    async fn test_todo_add() {
-        let request = test::TestRequest::post().to_http_request();
-        let response = todo_add(request).await.unwrap();
-        assert_eq!(response.title, "add".to_owned());
-    }
-
-    #[actix_rt::test]
-    async fn test_todo_edit() {
-        let request = test::TestRequest::get().to_http_request();
-        let response = todo_edit(request).await.unwrap();
-        assert_eq!(response.title, "edit".to_owned());
-    }
-
-    #[actix_rt::test]
-    async fn test_todo_delete() {
-        let request = test::TestRequest::get().to_http_request();
-        let response = todo_delete(request).await.unwrap();
-        assert_eq!(response.title, "delete".to_owned());
-    }
 }
