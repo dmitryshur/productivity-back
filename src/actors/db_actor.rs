@@ -75,7 +75,7 @@ impl Handler<TodoCreateMessage> for DbActor {
                 let mut connection = pool.get().unwrap();
 
                 connection.query(
-                    "INSERT INTO todos(user_id, title, body) VALUES($1, $2, $3) RETURNING id, creation_date",
+                    "INSERT INTO todo(user_id, title, body) VALUES($1, $2, $3) RETURNING id, creation_date",
                     &[&msg.user_id, &msg.title, &msg.body],
                 )
             })

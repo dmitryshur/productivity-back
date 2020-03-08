@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate serde_json;
 
 use actix::prelude::*;
 use actix_web::{middleware, web, App, HttpServer};
