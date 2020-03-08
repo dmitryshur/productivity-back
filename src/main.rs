@@ -1,5 +1,8 @@
+#[macro_use]
+extern crate log;
+
 use actix::prelude::*;
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
 
 mod actors;
 mod todo;
@@ -17,8 +20,13 @@ pub struct AppState {
 async fn main() -> std::io::Result<()> {
     let db_actor = Arc::new(DbActor::new().start());
 
+    std::env::set_var("RUST_LOG", "warnings=warn,actix_web=info");
+    std::env::set_var("RUST_BACKTRACE", "1");
+    env_logger::init();
+
     HttpServer::new(move || {
         App::new()
+            .wrap(middleware::Logger::default())
             .data(AppState {
                 db_actor: db_actor.clone(),
             })

@@ -1,18 +1,22 @@
-use crate::actors::db_actor::TodoCreateMessage;
+use crate::actors::db_actor::{DbErrors, TodoCreateMessage};
 use crate::AppState;
 use actix_web::{
     web::{Data, Json},
-    HttpRequest,
+    HttpResponse,
 };
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct TodoCreateRequest {
     user_id: i32,
     title: String,
     body: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
 }
 
 #[derive(Serialize)]
@@ -28,12 +32,8 @@ pub struct TodoGetRequest {
     limit: Option<i32>,
 }
 
-pub async fn todo_create(
-    request: Json<TodoCreateRequest>,
-    state: Data<AppState>,
-) -> Result<Json<TodoCreateResponse>, ()> {
+pub async fn todo_create(request: Json<TodoCreateRequest>, state: Data<AppState>) -> HttpResponse {
     let request_json = request.into_inner().clone();
-    // TODO if an error returns, map it to a custom error message
     let rows = state
         .db_actor
         .send(TodoCreateMessage::new(
@@ -42,21 +42,28 @@ pub async fn todo_create(
             request_json.body,
         ))
         .await
-        .map_err(|_| ())
-        .and_then(|result| result);
+        .map_err(|_| DbErrors::Runtime)
+        .and_then(|res| res);
 
-    if let Ok(rows) = rows {
-        let row = &rows[0];
+    match rows {
+        Ok(rows) => {
+            let row = &rows[0];
+            let response_json = TodoCreateResponse {
+                id: row.get("id"),
+                creation_date: row.get("creation_date"),
+            };
 
-        let response_json = TodoCreateResponse {
-            id: row.get("id"),
-            creation_date: row.get("creation_date"),
-        };
+            HttpResponse::Ok().json(response_json)
+        }
+        Err(e) => {
+            let response_json = ErrorResponse {
+                error: "DB error".to_owned(),
+            };
+            warn!(target: "warnings", "Warn: {:?}", e);
 
-        return Ok(Json(response_json));
+            HttpResponse::InternalServerError().json(response_json)
+        }
     }
-
-    Err(())
 }
 
 #[cfg(test)]
