@@ -1,4 +1,4 @@
-use crate::todos::todo_models::TodoDbExecutor;
+use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
 use actix_web::{self, dev, error, http, web};
 use chrono::prelude::*;
@@ -12,25 +12,37 @@ pub struct TodoCreateRequest {
     body: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct TodoGetRequest {
+    user_id: i32,
+    offset: Option<i64>,
+    limit: Option<i64>,
+}
+
 #[derive(Serialize)]
 pub struct TodoCreateResponse {
     id: i32,
     creation_date: DateTime<Utc>,
 }
 
-#[derive(Debug)]
-pub enum TodoCreateErrors {
-    Db(postgres::Error),
-    Server,
+#[derive(Serialize)]
+pub struct TodoGetResponse {
+    todos: Vec<Todo>,
 }
 
-impl std::fmt::Display for TodoCreateErrors {
+impl std::fmt::Display for TodoGeneralErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl error::ResponseError for TodoCreateErrors {
+#[derive(Debug)]
+pub enum TodoGeneralErrors {
+    Db(postgres::Error),
+    Server,
+}
+
+impl error::ResponseError for TodoGeneralErrors {
     fn status_code(&self) -> http::StatusCode {
         match *self {
             _ => http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -39,8 +51,8 @@ impl error::ResponseError for TodoCreateErrors {
 
     fn error_response(&self) -> actix_web::HttpResponse {
         let error_json = match self {
-            TodoCreateErrors::Server => json!({"error": "Interval server error"}),
-            TodoCreateErrors::Db(_e) => json!({"error": "DB error"}),
+            TodoGeneralErrors::Server => json!({"error": "Interval server error"}),
+            TodoGeneralErrors::Db(_e) => json!({"error": "DB error"}),
         };
 
         dev::HttpResponseBuilder::new(self.status_code())
@@ -58,7 +70,7 @@ pub enum DbErrors {
 pub async fn todo_create(
     request: web::Json<TodoCreateRequest>,
     state: web::Data<AppState>,
-) -> actix_web::Result<actix_web::HttpResponse, TodoCreateErrors> {
+) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
     let pool = state.db_pool.clone();
 
     let rows = web::block(move || {
@@ -85,8 +97,55 @@ pub async fn todo_create(
             warn!(target: "warnings", "Warn: {:?}", err);
 
             match err {
-                DbErrors::Postgres(e) => Err(TodoCreateErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoCreateErrors::Server),
+                DbErrors::Postgres(e) => Err(TodoGeneralErrors::Db(e)),
+                DbErrors::Runtime => Err(TodoGeneralErrors::Server),
+            }
+        }
+    }
+}
+
+pub async fn todo_get(
+    request: web::Json<TodoGetRequest>,
+    state: web::Data<AppState>,
+) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
+    let pool = state.db_pool.clone();
+
+    let rows = web::block(move || {
+        let connection = pool.get().unwrap();
+        TodoDbExecutor::new(connection).get(&[&request.user_id, &request.offset, &request.limit])
+    })
+    .await
+    .map_err(|e| match e {
+        error::BlockingError::Error(e) => DbErrors::Postgres(e),
+        error::BlockingError::Canceled => DbErrors::Runtime,
+    });
+
+    match rows {
+        Ok(rows) => {
+            let todos: Vec<Todo> = rows
+                .iter()
+                .map(|row| {
+                    let id = row.get("id");
+                    let user_id = row.get("user_id");
+                    let title = row.get("title");
+                    let body = row.get("body");
+                    let creation_date = row.get("creation_date");
+                    let last_edit_date = row.get("last_edit_date");
+                    let done = row.get("done");
+
+                    Todo::new(id, user_id, title, body, creation_date, last_edit_date, done)
+                })
+                .collect();
+
+            let response_json = TodoGetResponse { todos };
+            Ok(actix_web::HttpResponse::Ok().json(response_json))
+        }
+        Err(err) => {
+            warn!(target: "warnings", "Warn: {:?}", err);
+
+            match err {
+                DbErrors::Postgres(e) => Err(TodoGeneralErrors::Db(e)),
+                DbErrors::Runtime => Err(TodoGeneralErrors::Server),
             }
         }
     }
