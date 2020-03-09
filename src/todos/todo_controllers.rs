@@ -1,3 +1,4 @@
+use crate::todos::todo_models::TodoDbExecutor;
 use crate::AppState;
 use actix_web::{self, dev, error, http, web};
 use chrono::prelude::*;
@@ -19,7 +20,7 @@ pub struct TodoCreateResponse {
 
 #[derive(Debug)]
 pub enum TodoCreateErrors {
-    Db,
+    Db(postgres::Error),
     Server,
 }
 
@@ -39,7 +40,7 @@ impl error::ResponseError for TodoCreateErrors {
     fn error_response(&self) -> actix_web::HttpResponse {
         let error_json = match self {
             TodoCreateErrors::Server => json!({"error": "Interval server error"}),
-            TodoCreateErrors::Db => json!({"error": "DB error"}),
+            TodoCreateErrors::Db(_e) => json!({"error": "DB error"}),
         };
 
         dev::HttpResponseBuilder::new(self.status_code())
@@ -61,12 +62,8 @@ pub async fn todo_create(
     let pool = state.db_pool.clone();
 
     let rows = web::block(move || {
-        let mut connection = pool.get().unwrap();
-
-        connection.query(
-            "INSERT INTO todo(user_id, title, body) VALUES($1, $2, $3) RETURNING id, creation_date",
-            &[&request.user_id, &request.title, &request.body],
-        )
+        let connection = pool.get().unwrap();
+        TodoDbExecutor::new(connection).create(&[&request.user_id, &request.title, &request.body])
     })
     .await
     .map_err(|e| match e {
@@ -88,7 +85,7 @@ pub async fn todo_create(
             warn!(target: "warnings", "Warn: {:?}", err);
 
             match err {
-                DbErrors::Postgres(_) => Err(TodoCreateErrors::Db),
+                DbErrors::Postgres(e) => Err(TodoCreateErrors::Db(e)),
                 DbErrors::Runtime => Err(TodoCreateErrors::Server),
             }
         }

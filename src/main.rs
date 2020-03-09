@@ -7,9 +7,9 @@ use actix_web::{middleware, web, App, HttpServer};
 use postgres;
 use r2d2::Pool;
 use r2d2_postgres::PostgresConnectionManager;
-use todo::todo_controllers::todo_create;
+use todos::todo_controllers::todo_create;
 
-mod todo;
+mod todos;
 
 #[derive(Debug)]
 pub struct AppState {
