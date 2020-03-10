@@ -150,9 +150,3 @@ pub async fn todo_get(
         }
     }
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use actix_web::test;
-}
