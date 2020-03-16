@@ -6,8 +6,8 @@ CREATE TABLE todo(
     user_id INTEGER NOT NULL,
     title VARCHAR(50) NOT NULL,
     body TEXT,
-    creation_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_edit_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    creation_date TIMESTAMPTZ NOT NULL,
+    last_edit_date TIMESTAMPTZ NOT NULL,
     done BOOLEAN NOT NULL DEFAULT false
 );
 

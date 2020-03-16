@@ -19,6 +19,15 @@ pub struct TodoGetRequest {
     limit: Option<i64>,
 }
 
+#[derive(Deserialize)]
+pub struct TodoEditRequest {
+    user_id: i32,
+    id: i32,
+    title: Option<String>,
+    body: Option<String>,
+    done: Option<bool>,
+}
+
 #[derive(Serialize)]
 pub struct TodoCreateResponse {
     id: i32,
@@ -28,6 +37,12 @@ pub struct TodoCreateResponse {
 #[derive(Serialize)]
 pub struct TodoGetResponse {
     todos: Vec<Todo>,
+}
+
+#[derive(Serialize)]
+pub struct TodoEditResponse {
+    id: i32,
+    last_edit_date: DateTime<Utc>,
 }
 
 impl std::fmt::Display for TodoGeneralErrors {
@@ -75,7 +90,14 @@ pub async fn todo_create(
 
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).create(&[&request.user_id, &request.title, &request.body])
+        let current_date = Utc::now();
+        TodoDbExecutor::new(connection).create(&[
+            &request.user_id,
+            &request.title,
+            &request.body,
+            &current_date,
+            &current_date,
+        ])
     })
     .await
     .map_err(|e| match e {
@@ -138,6 +160,49 @@ pub async fn todo_get(
                 .collect();
 
             let response_json = TodoGetResponse { todos };
+            Ok(actix_web::HttpResponse::Ok().json(response_json))
+        }
+        Err(err) => {
+            warn!(target: "warnings", "Warn: {:?}", err);
+
+            match err {
+                DbErrors::Postgres(e) => Err(TodoGeneralErrors::Db(e)),
+                DbErrors::Runtime => Err(TodoGeneralErrors::Server),
+            }
+        }
+    }
+}
+
+pub async fn todo_edit(
+    request: web::Json<TodoEditRequest>,
+    state: web::Data<AppState>,
+) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
+    let pool = state.db_pool.clone();
+
+    let rows = web::block(move || {
+        let connection = pool.get().unwrap();
+        TodoDbExecutor::new(connection).edit(&[
+            &request.title,
+            &request.body,
+            &request.done,
+            &request.user_id,
+            &request.id,
+        ])
+    })
+    .await
+    .map_err(|e| match e {
+        error::BlockingError::Error(e) => DbErrors::Postgres(e),
+        error::BlockingError::Canceled => DbErrors::Runtime,
+    });
+
+    match rows {
+        Ok(rows) => {
+            let row = &rows[0];
+            let response_json = TodoEditResponse {
+                id: row.get("id"),
+                last_edit_date: row.get("last_edit_date"),
+            };
+
             Ok(actix_web::HttpResponse::Ok().json(response_json))
         }
         Err(err) => {

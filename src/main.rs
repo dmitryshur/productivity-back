@@ -7,7 +7,7 @@ use actix_web::{middleware, web, App, HttpServer};
 use postgres;
 use r2d2::Pool;
 use r2d2_postgres::PostgresConnectionManager;
-use todos::todo_controllers::{todo_create, todo_get};
+use todos::todo_controllers::{todo_create, todo_edit, todo_get};
 
 mod todos;
 
@@ -37,7 +37,8 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/todo")
                     .route("/create", web::post().to(todo_create))
-                    .route("/get", web::get().to(todo_get)),
+                    .route("/get", web::get().to(todo_get))
+                    .route("/edit", web::post().to(todo_edit)),
             )
     })
     .bind("127.0.0.1:5555")?
