@@ -28,6 +28,12 @@ pub struct TodoEditRequest {
     done: Option<bool>,
 }
 
+#[derive(Deserialize)]
+pub struct TodoDeleteRequest {
+    user_id: i32,
+    todos: Vec<i32>,
+}
+
 #[derive(Serialize)]
 pub struct TodoCreateResponse {
     id: i32,
@@ -43,6 +49,11 @@ pub struct TodoGetResponse {
 pub struct TodoEditResponse {
     id: i32,
     last_edit_date: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct TodoDeleteResponse {
+    todos: Vec<i32>,
 }
 
 impl std::fmt::Display for TodoGeneralErrors {
@@ -203,6 +214,40 @@ pub async fn todo_edit(
                 last_edit_date: row.get("last_edit_date"),
             };
 
+            Ok(actix_web::HttpResponse::Ok().json(response_json))
+        }
+        Err(err) => {
+            warn!(target: "warnings", "Warn: {:?}", err);
+
+            match err {
+                DbErrors::Postgres(e) => Err(TodoGeneralErrors::Db(e)),
+                DbErrors::Runtime => Err(TodoGeneralErrors::Server),
+            }
+        }
+    }
+}
+
+pub async fn todo_delete(
+    request: web::Json<TodoDeleteRequest>,
+    state: web::Data<AppState>,
+) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
+    let pool = state.db_pool.clone();
+
+    let rows = web::block(move || {
+        let connection = pool.get().unwrap();
+        TodoDbExecutor::new(connection).delete(&[&request.user_id, &request.todos])
+    })
+    .await
+    .map_err(|e| match e {
+        error::BlockingError::Error(e) => DbErrors::Postgres(e),
+        error::BlockingError::Canceled => DbErrors::Runtime,
+    });
+
+    match rows {
+        Ok(rows) => {
+            let todo_ids: Vec<i32> = rows.iter().map(|row| row.get("id")).collect();
+
+            let response_json = TodoDeleteResponse { todos: todo_ids };
             Ok(actix_web::HttpResponse::Ok().json(response_json))
         }
         Err(err) => {

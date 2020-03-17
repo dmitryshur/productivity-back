@@ -95,4 +95,18 @@ impl TodoDbExecutor {
 
         Ok(rows)
     }
+
+    pub fn delete(&mut self, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+        let mut transaction = self.connection.transaction()?;
+        let rows = transaction.query(
+            "
+            DELETE FROM todo
+            WHERE user_id = $1 AND id = ANY($2)
+            RETURNING id",
+            params,
+        )?;
+        transaction.commit()?;
+
+        Ok(rows)
+    }
 }
