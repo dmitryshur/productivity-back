@@ -3,12 +3,14 @@ extern crate log;
 #[macro_use]
 extern crate serde_json;
 
+use account::account_controllers::account_register;
 use actix_web::{middleware, web, App, HttpServer};
 use postgres;
 use r2d2::Pool;
 use r2d2_postgres::PostgresConnectionManager;
 use todos::todo_controllers::{todo_create, todo_delete, todo_edit, todo_get};
 
+mod account;
 mod todos;
 
 #[derive(Debug)]
@@ -41,6 +43,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/edit", web::post().to(todo_edit))
                     .route("/delete", web::post().to(todo_delete)),
             )
+            .service(web::scope("/api/account").route("/register", web::post().to(account_register)))
     })
     .bind("127.0.0.1:5555")?
     .run()

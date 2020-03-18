@@ -1,27 +1,28 @@
 use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
+use crate::account::account_models::DbErrors;
 use actix_web::{self, dev, error, http, web};
 use chrono::prelude::*;
 use postgres;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize)]
 pub struct TodoCreateRequest {
-    user_id: i32,
+    account_id: i32,
     title: String,
     body: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct TodoGetRequest {
-    user_id: i32,
+    account_id: i32,
     offset: Option<i64>,
     limit: Option<i64>,
 }
 
 #[derive(Deserialize)]
 pub struct TodoEditRequest {
-    user_id: i32,
+    account_id: i32,
     id: i32,
     title: Option<String>,
     body: Option<String>,
@@ -30,7 +31,7 @@ pub struct TodoEditRequest {
 
 #[derive(Deserialize)]
 pub struct TodoDeleteRequest {
-    user_id: i32,
+    account_id: i32,
     todos: Vec<i32>,
 }
 
@@ -48,7 +49,8 @@ pub struct TodoGetResponse {
 #[derive(Serialize)]
 pub struct TodoEditResponse {
     id: i32,
-    last_edit_date: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_edit_date: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize)]
@@ -56,16 +58,17 @@ pub struct TodoDeleteResponse {
     todos: Vec<i32>,
 }
 
-impl std::fmt::Display for TodoGeneralErrors {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
 
 #[derive(Debug)]
 pub enum TodoGeneralErrors {
     Db(postgres::Error),
     Server,
+}
+
+impl std::fmt::Display for TodoGeneralErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl error::ResponseError for TodoGeneralErrors {
@@ -87,12 +90,6 @@ impl error::ResponseError for TodoGeneralErrors {
     }
 }
 
-#[derive(Debug)]
-pub enum DbErrors {
-    Postgres(postgres::Error),
-    Runtime,
-}
-
 pub async fn todo_create(
     request: web::Json<TodoCreateRequest>,
     state: web::Data<AppState>,
@@ -103,7 +100,7 @@ pub async fn todo_create(
         let connection = pool.get().unwrap();
         let current_date = Utc::now();
         TodoDbExecutor::new(connection).create(&[
-            &request.user_id,
+            &request.account_id,
             &request.title,
             &request.body,
             &current_date,
@@ -145,7 +142,7 @@ pub async fn todo_get(
 
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).get(&[&request.user_id, &request.offset, &request.limit])
+        TodoDbExecutor::new(connection).get(&[&request.account_id, &request.offset, &request.limit])
     })
     .await
     .map_err(|e| match e {
@@ -159,14 +156,14 @@ pub async fn todo_get(
                 .iter()
                 .map(|row| {
                     let id = row.get("id");
-                    let user_id = row.get("user_id");
+                    let account_id = row.get("account_id");
                     let title = row.get("title");
                     let body = row.get("body");
                     let creation_date = row.get("creation_date");
                     let last_edit_date = row.get("last_edit_date");
                     let done = row.get("done");
 
-                    Todo::new(id, user_id, title, body, creation_date, last_edit_date, done)
+                    Todo::new(id, account_id, title, body, creation_date, last_edit_date, done)
                 })
                 .collect();
 
@@ -189,6 +186,7 @@ pub async fn todo_edit(
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
     let pool = state.db_pool.clone();
+    let todo_id = request.id;
 
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
@@ -196,7 +194,7 @@ pub async fn todo_edit(
             &request.title,
             &request.body,
             &request.done,
-            &request.user_id,
+            &request.account_id,
             &request.id,
         ])
     })
@@ -208,10 +206,17 @@ pub async fn todo_edit(
 
     match rows {
         Ok(rows) => {
-            let row = &rows[0];
-            let response_json = TodoEditResponse {
-                id: row.get("id"),
-                last_edit_date: row.get("last_edit_date"),
+            let response_json = if rows.is_empty() {
+                TodoEditResponse {
+                    id: todo_id,
+                    last_edit_date: None,
+                }
+            } else {
+                let row = &rows[0];
+                TodoEditResponse {
+                    id: row.get("id"),
+                    last_edit_date: row.get("last_edit_date"),
+                }
             };
 
             Ok(actix_web::HttpResponse::Ok().json(response_json))
@@ -235,7 +240,7 @@ pub async fn todo_delete(
 
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).delete(&[&request.user_id, &request.todos])
+        TodoDbExecutor::new(connection).delete(&[&request.account_id, &request.todos])
     })
     .await
     .map_err(|e| match e {

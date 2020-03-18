@@ -8,7 +8,7 @@ use serde::Serialize;
 #[derive(Serialize, Debug)]
 pub struct Todo {
     id: i32,
-    user_id: i32,
+    account_id: i32,
     title: String,
     body: Option<String>,
     creation_date: DateTime<Utc>,
@@ -19,7 +19,7 @@ pub struct Todo {
 impl Todo {
     pub fn new(
         id: i32,
-        user_id: i32,
+        account_id: i32,
         title: String,
         body: Option<String>,
         creation_date: DateTime<Utc>,
@@ -28,7 +28,7 @@ impl Todo {
     ) -> Self {
         Todo {
             id,
-            user_id,
+            account_id,
             title,
             body,
             creation_date,
@@ -51,7 +51,7 @@ impl TodoDbExecutor {
         let mut transaction = self.connection.transaction()?;
         let rows = transaction.query(
             "
-            INSERT INTO todo(user_id, title, body, creation_date, last_edit_date)
+            INSERT INTO todo(account_id, title, body, creation_date, last_edit_date)
             VALUES($1, $2, $3, $4, $5)
             RETURNING id, creation_date",
             params,
@@ -66,9 +66,9 @@ impl TodoDbExecutor {
         let rows = transaction.query(
             "
             SELECT
-                id, user_id, title, body, creation_date, last_edit_date, done
+                id, account_id, title, body, creation_date, last_edit_date, done
             FROM todo
-            WHERE user_id = $1
+            WHERE account_id = $1
             ORDER BY last_edit_date DESC
             OFFSET $2
             LIMIT $3",
@@ -87,7 +87,7 @@ impl TodoDbExecutor {
             SET title = COALESCE($1, title),
                 body = COALESCE($2, body),
                 done = COALESCE($3, done)
-            WHERE user_id = $4 AND id = $5
+            WHERE account_id = $4 AND id = $5
             RETURNING id, last_edit_date",
             params,
         )?;
@@ -101,7 +101,7 @@ impl TodoDbExecutor {
         let rows = transaction.query(
             "
             DELETE FROM todo
-            WHERE user_id = $1 AND id = ANY($2)
+            WHERE account_id = $1 AND id = ANY($2)
             RETURNING id",
             params,
         )?;
