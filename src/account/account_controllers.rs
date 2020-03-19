@@ -1,5 +1,6 @@
 use crate::account::account_models::{AccountDbExecutor, DbErrors};
 use crate::common::responses::ServerResponse;
+use crate::common::validators::{ValidationErrors, Validator};
 use crate::AppState;
 use actix_web::{self, dev, error, http, web};
 use serde::Deserialize;
@@ -20,6 +21,15 @@ pub enum AccountRegistrationErrors {
     EmailExists,
     Server,
     Db,
+}
+
+impl From<ValidationErrors> for AccountRegistrationErrors {
+    fn from(err: ValidationErrors) -> AccountRegistrationErrors {
+        match err {
+            ValidationErrors::Email => AccountRegistrationErrors::InvalidEmail,
+            ValidationErrors::Password => AccountRegistrationErrors::InvalidPassword,
+        }
+    }
 }
 
 impl std::fmt::Display for AccountRegistrationErrors {
@@ -75,8 +85,10 @@ pub async fn account_register(
     request: web::Json<AccountRegisterRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, AccountRegistrationErrors> {
-    let pool = state.db_pool.clone();
+    Validator::email(&request.email)?;
+    Validator::password(&request.password)?;
 
+    let pool = state.db_pool.clone();
     let rows_count = web::block(move || {
         let connection = pool.get().unwrap();
         AccountDbExecutor::new(connection).register(&[&request.email, &request.password])
