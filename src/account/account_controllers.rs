@@ -3,6 +3,7 @@ use crate::common::responses::ServerResponse;
 use crate::common::validators::{ValidationErrors, Validator};
 use crate::AppState;
 use actix_web::{self, dev, error, http, web};
+use postgres::error::SqlState;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -108,8 +109,11 @@ pub async fn account_register(
             warn!(target: "warnings", "Warn: {:?}", err);
 
             match err {
-                DbErrors::Postgres(_e) => Err(AccountRegistrationErrors::Db),
                 DbErrors::Runtime => Err(AccountRegistrationErrors::Server),
+                DbErrors::Postgres(e) => match e.code().unwrap().code() {
+                    "23505" => Err(AccountRegistrationErrors::EmailExists),
+                    _ => Err(AccountRegistrationErrors::Db),
+                },
             }
         }
     }
