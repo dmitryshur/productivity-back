@@ -12,6 +12,7 @@ use todos::todo_controllers::{todo_create, todo_delete, todo_edit, todo_get};
 
 mod account;
 mod todos;
+mod common;
 
 #[derive(Debug)]
 pub struct AppState {

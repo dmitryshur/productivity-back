@@ -1,7 +1,8 @@
 use crate::account::account_models::{AccountDbExecutor, DbErrors};
+use crate::common::responses::ServerResponse;
 use crate::AppState;
 use actix_web::{self, dev, error, http, web};
-use serde::{Deserialize};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct AccountRegisterRequest {
@@ -39,19 +40,22 @@ impl error::ResponseError for AccountRegistrationErrors {
     }
 
     fn error_response(&self) -> actix_web::HttpResponse {
-        let error_json = match self {
-            AccountRegistrationErrors::InvalidEmail => json!({"error": "Invalid email"}),
-            AccountRegistrationErrors::InvalidPassword => {
-                json!({"error": "Invalid password. the password must be at least 8 characters long"})
+        let response_json = match self {
+            AccountRegistrationErrors::InvalidEmail => ServerResponse::new((), json!({"error": "Invalid email"})),
+            AccountRegistrationErrors::InvalidPassword => ServerResponse::new(
+                (),
+                json!({"error": "Invalid password. the password must be at least 8 characters long"}),
+            ),
+            AccountRegistrationErrors::EmailExists => {
+                ServerResponse::new((), json!({"error": "Such an email already exists"}))
             }
-            AccountRegistrationErrors::EmailExists => json!({"error": "Such an email already exists"}),
-            AccountRegistrationErrors::Server => json!({"error": "Server error"}),
-            AccountRegistrationErrors::Db => json!({"error": "Db error"}),
+            AccountRegistrationErrors::Server => ServerResponse::new((), json!({"error": "Server error"})),
+            AccountRegistrationErrors::Db => ServerResponse::new((), json!({"error": "Db error"})),
         };
 
         dev::HttpResponseBuilder::new(self.status_code())
             .set_header(http::header::CONTENT_TYPE, "application/json")
-            .json(error_json)
+            .json(response_json)
     }
 }
 
@@ -84,7 +88,10 @@ pub async fn account_register(
     });
 
     match rows_count {
-        Ok(_count) => Ok(actix_web::HttpResponse::Ok().json({})),
+        Ok(_count) => {
+            let response_json = ServerResponse::new((), ());
+            Ok(actix_web::HttpResponse::Ok().json(response_json))
+        }
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 

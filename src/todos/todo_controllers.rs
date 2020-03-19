@@ -1,6 +1,7 @@
+use crate::account::account_models::DbErrors;
+use crate::common::responses::ServerResponse;
 use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
-use crate::account::account_models::DbErrors;
 use actix_web::{self, dev, error, http, web};
 use chrono::prelude::*;
 use postgres;
@@ -58,7 +59,6 @@ pub struct TodoDeleteResponse {
     todos: Vec<i32>,
 }
 
-
 #[derive(Debug)]
 pub enum TodoGeneralErrors {
     Db(postgres::Error),
@@ -79,14 +79,14 @@ impl error::ResponseError for TodoGeneralErrors {
     }
 
     fn error_response(&self) -> actix_web::HttpResponse {
-        let error_json = match self {
-            TodoGeneralErrors::Server => json!({"error": "Interval server error"}),
-            TodoGeneralErrors::Db(_e) => json!({"error": "DB error"}),
+        let response_json = match self {
+            TodoGeneralErrors::Server => ServerResponse::new((), json!({"error": "Interval server error"})),
+            TodoGeneralErrors::Db(_e) => ServerResponse::new((), json!({"error": "DB error"})),
         };
 
         dev::HttpResponseBuilder::new(self.status_code())
             .set_header(http::header::CONTENT_TYPE, "application/json")
-            .json(error_json)
+            .json(response_json)
     }
 }
 
@@ -116,11 +116,12 @@ pub async fn todo_create(
     match rows {
         Ok(rows) => {
             let row = &rows[0];
-            let response_json = TodoCreateResponse {
+            let data = TodoCreateResponse {
                 id: row.get("id"),
                 creation_date: row.get("creation_date"),
             };
 
+            let response_json = ServerResponse::new(data, ());
             Ok(actix_web::HttpResponse::Ok().json(response_json))
         }
         Err(err) => {
@@ -167,7 +168,8 @@ pub async fn todo_get(
                 })
                 .collect();
 
-            let response_json = TodoGetResponse { todos };
+            let data = TodoGetResponse { todos };
+            let response_json = ServerResponse::new(data, ());
             Ok(actix_web::HttpResponse::Ok().json(response_json))
         }
         Err(err) => {
@@ -190,10 +192,12 @@ pub async fn todo_edit(
 
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
+        let current_date = Utc::now();
         TodoDbExecutor::new(connection).edit(&[
             &request.title,
             &request.body,
             &request.done,
+            &current_date,
             &request.account_id,
             &request.id,
         ])
@@ -206,7 +210,7 @@ pub async fn todo_edit(
 
     match rows {
         Ok(rows) => {
-            let response_json = if rows.is_empty() {
+            let data = if rows.is_empty() {
                 TodoEditResponse {
                     id: todo_id,
                     last_edit_date: None,
@@ -219,6 +223,7 @@ pub async fn todo_edit(
                 }
             };
 
+            let response_json = ServerResponse::new(data, ());
             Ok(actix_web::HttpResponse::Ok().json(response_json))
         }
         Err(err) => {
@@ -252,7 +257,8 @@ pub async fn todo_delete(
         Ok(rows) => {
             let todo_ids: Vec<i32> = rows.iter().map(|row| row.get("id")).collect();
 
-            let response_json = TodoDeleteResponse { todos: todo_ids };
+            let data = TodoDeleteResponse { todos: todo_ids };
+            let response_json = ServerResponse::new(data, ());
             Ok(actix_web::HttpResponse::Ok().json(response_json))
         }
         Err(err) => {

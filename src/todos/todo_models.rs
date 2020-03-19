@@ -86,8 +86,9 @@ impl TodoDbExecutor {
             UPDATE todo
             SET title = COALESCE($1, title),
                 body = COALESCE($2, body),
-                done = COALESCE($3, done)
-            WHERE account_id = $4 AND id = $5
+                done = COALESCE($3, done),
+                last_edit_date = $4
+            WHERE account_id = $5 AND id = $6
             RETURNING id, last_edit_date",
             params,
         )?;
