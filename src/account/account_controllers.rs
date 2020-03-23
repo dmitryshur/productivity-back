@@ -3,17 +3,13 @@ use crate::common::responses::ServerResponse;
 use crate::common::validators::{ValidationErrors, Validator};
 use crate::AppState;
 use actix_web::{self, dev, error, http, web};
-use postgres::error::SqlState;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-pub struct AccountRegisterRequest {
+pub struct AccountRequest {
     email: String,
     password: String,
 }
-
-#[derive(Deserialize)]
-pub struct AccountLoginRequest {}
 
 #[derive(Debug)]
 pub enum AccountRegistrationErrors {
@@ -29,6 +25,14 @@ impl From<ValidationErrors> for AccountRegistrationErrors {
         match err {
             ValidationErrors::Email => AccountRegistrationErrors::InvalidEmail,
             ValidationErrors::Password => AccountRegistrationErrors::InvalidPassword,
+        }
+    }
+}
+
+impl From<ValidationErrors> for AccountLoginErrors {
+    fn from(err: ValidationErrors) -> AccountLoginErrors {
+        match err {
+            _ => AccountLoginErrors::InvalidInfo,
         }
     }
 }
@@ -73,7 +77,7 @@ impl error::ResponseError for AccountRegistrationErrors {
 #[derive(Debug)]
 pub enum AccountLoginErrors {
     InvalidInfo,
-    ServerError,
+    Server,
 }
 
 impl std::fmt::Display for AccountLoginErrors {
@@ -82,8 +86,28 @@ impl std::fmt::Display for AccountLoginErrors {
     }
 }
 
+impl error::ResponseError for AccountLoginErrors {
+    fn status_code(&self) -> http::StatusCode {
+        match *self {
+            AccountLoginErrors::InvalidInfo => http::StatusCode::UNAUTHORIZED,
+            AccountLoginErrors::Server => http::StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn error_response(&self) -> actix_web::HttpResponse {
+        let response_json = match self {
+            AccountLoginErrors::InvalidInfo => ServerResponse::new((), json!({"error": "Wrong email or password"})),
+            AccountLoginErrors::Server => ServerResponse::new((), json!({"error": "Server error"})),
+        };
+
+        dev::HttpResponseBuilder::new(self.status_code())
+            .set_header(http::header::CONTENT_TYPE, "application/json")
+            .json(response_json)
+    }
+}
+
 pub async fn account_register(
-    request: web::Json<AccountRegisterRequest>,
+    request: web::Json<AccountRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, AccountRegistrationErrors> {
     Validator::email(&request.email)?;
@@ -114,6 +138,45 @@ pub async fn account_register(
                     "23505" => Err(AccountRegistrationErrors::EmailExists),
                     _ => Err(AccountRegistrationErrors::Db),
                 },
+            }
+        }
+    }
+}
+
+pub async fn account_login(
+    request: web::Json<AccountRequest>,
+    state: web::Data<AppState>,
+) -> actix_web::Result<actix_web::HttpResponse, AccountLoginErrors> {
+    Validator::email(&request.email)?;
+    Validator::password(&request.password)?;
+
+    let pool = state.db_pool.clone();
+    let rows = web::block(move || {
+        let connection = pool.get().unwrap();
+        AccountDbExecutor::new(connection).login(&[&request.email, &request.password])
+    })
+    .await
+    .map_err(|e| match e {
+        error::BlockingError::Error(e) => DbErrors::Postgres(e),
+        error::BlockingError::Canceled => DbErrors::Runtime,
+    });
+
+    match rows {
+        Ok(rows) => {
+            if rows.is_empty() {
+                return Err(AccountLoginErrors::InvalidInfo);
+            }
+            let row = &rows[0];
+            let session_id: String = row.get("id");
+            let response_json = ServerResponse::new(json!({ "session_id": session_id }), ());
+            Ok(actix_web::HttpResponse::Ok().json(response_json))
+        }
+        Err(err) => {
+            warn!(target: "warnings", "Warn: {:?}", err);
+
+            return match err {
+                DbErrors::Runtime => Err(AccountLoginErrors::Server),
+                DbErrors::Postgres(_err) => Err(AccountLoginErrors::Server),
             }
         }
     }

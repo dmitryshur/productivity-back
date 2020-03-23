@@ -30,6 +30,21 @@ impl AccountDbExecutor {
     }
 
     pub fn login(&mut self, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
-        unimplemented!()
+        let mut transaction = self.connection.transaction()?;
+        let rows = transaction.query(
+            "
+            INSERT INTO account_session (id, account_id)
+            SELECT gen_salt('bf'), id
+            FROM account
+            WHERE email = $1 AND password = crypt($2, password)
+            ON CONFLICT (account_id)
+            DO
+                UPDATE SET id = gen_salt('bf')
+            RETURNING id",
+            params,
+        )?;
+        transaction.commit()?;
+
+        Ok(rows)
     }
 }
