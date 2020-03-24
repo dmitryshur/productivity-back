@@ -2,13 +2,19 @@ use crate::account::account_models::{AccountDbExecutor, DbErrors};
 use crate::common::responses::ServerResponse;
 use crate::common::validators::{ValidationErrors, Validator};
 use crate::AppState;
+use actix_session::Session;
 use actix_web::{self, dev, error, http, web};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct AccountRequest {
     email: String,
     password: String,
+}
+
+#[derive(Serialize)]
+pub struct AccountLoginResponse {
+    account_id: i32,
 }
 
 #[derive(Debug)]
@@ -33,6 +39,14 @@ impl From<ValidationErrors> for AccountLoginErrors {
     fn from(err: ValidationErrors) -> AccountLoginErrors {
         match err {
             _ => AccountLoginErrors::InvalidInfo,
+        }
+    }
+}
+
+impl From<error::Error> for AccountLoginErrors {
+    fn from(err: error::Error) -> AccountLoginErrors {
+        match err {
+            _ => AccountLoginErrors::Server,
         }
     }
 }
@@ -146,6 +160,7 @@ pub async fn account_register(
 pub async fn account_login(
     request: web::Json<AccountRequest>,
     state: web::Data<AppState>,
+    session: Session,
 ) -> actix_web::Result<actix_web::HttpResponse, AccountLoginErrors> {
     Validator::email(&request.email)?;
     Validator::password(&request.password)?;
@@ -167,8 +182,10 @@ pub async fn account_login(
                 return Err(AccountLoginErrors::InvalidInfo);
             }
             let row = &rows[0];
-            let session_id: String = row.get("id");
-            let response_json = ServerResponse::new(json!({ "session_id": session_id }), ());
+            let account_id: i32 = row.get("id");
+            session.set("account_id", &account_id)?;
+
+            let response_json = ServerResponse::new(AccountLoginResponse { account_id }, ());
             Ok(actix_web::HttpResponse::Ok().json(response_json))
         }
         Err(err) => {
@@ -177,7 +194,7 @@ pub async fn account_login(
             return match err {
                 DbErrors::Runtime => Err(AccountLoginErrors::Server),
                 DbErrors::Postgres(_err) => Err(AccountLoginErrors::Server),
-            }
+            };
         }
     }
 }

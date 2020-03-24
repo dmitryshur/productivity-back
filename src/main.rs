@@ -4,7 +4,8 @@ extern crate log;
 extern crate serde_json;
 
 use account::account_controllers::{account_login, account_register};
-use actix_web::{middleware, web, App, HttpServer};
+use actix_session::CookieSession;
+use actix_web::{cookie, middleware, web, App, HttpServer};
 use postgres;
 use r2d2::Pool;
 use r2d2_postgres::PostgresConnectionManager;
@@ -13,6 +14,8 @@ use todos::todo_controllers::{todo_create, todo_delete, todo_edit, todo_get};
 mod account;
 mod common;
 mod todos;
+
+const MONTH_IN_SECONDS: i64 = 2592000;
 
 #[derive(Debug)]
 pub struct AppState {
@@ -36,6 +39,13 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
+            .wrap(
+                CookieSession::private(&[0; 32])
+                    .http_only(true)
+                    .max_age(MONTH_IN_SECONDS)
+                    .same_site(cookie::SameSite::Strict)
+                    .secure(false),
+            )
             .data(AppState { db_pool: pool.clone() })
             .service(
                 web::scope("/api/todo")

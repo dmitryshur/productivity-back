@@ -17,11 +17,6 @@ CREATE TABLE account(
     password TEXT NOT NULL
 );
 
-CREATE TABLE account_session(
-    id TEXT PRIMARY KEY,
-    account_id INTEGER UNIQUE NOT NULL
-);
-
 GRANT ALL PRIVILEGES ON TABLE todo TO dshur;
 GRANT ALL PRIVILEGES ON TABLE account TO dshur;
 GRANT ALL PRIVILEGES ON SEQUENCE todo_id_seq TO dshur;

@@ -9,6 +9,7 @@ pub struct ServerResponse<T: Serialize, U> {
 impl<T, U> ServerResponse<T, U>
 where
     T: Serialize,
+    U: Serialize,
 {
     pub fn new(data: T, meta: U) -> Self {
         ServerResponse { data, meta }
