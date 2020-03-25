@@ -2,7 +2,7 @@ use crate::account::account_models::{AccountDbExecutor, DbErrors};
 use crate::common::responses::ServerResponse;
 use crate::common::validators::{ValidationErrors, Validator};
 use crate::AppState;
-use actix_session::Session;
+use redis::AsyncCommands;
 use actix_web::{self, dev, error, http, web};
 use serde::{Deserialize, Serialize};
 
@@ -160,11 +160,17 @@ pub async fn account_register(
 pub async fn account_login(
     request: web::Json<AccountRequest>,
     state: web::Data<AppState>,
-    session: Session,
 ) -> actix_web::Result<actix_web::HttpResponse, AccountLoginErrors> {
     Validator::email(&request.email)?;
     Validator::password(&request.password)?;
 
+    let mut redis_connection = state
+        .redis_client
+        .get_async_connection()
+        .await
+        .expect("Can't get redis connection");
+
+    let _ : () = redis_connection.set("key1", 42).await.expect("Can't set key");
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
@@ -183,7 +189,6 @@ pub async fn account_login(
             }
             let row = &rows[0];
             let account_id: i32 = row.get("id");
-            session.set("account_id", &account_id)?;
 
             let response_json = ServerResponse::new(AccountLoginResponse { account_id }, ());
             Ok(actix_web::HttpResponse::Ok().json(response_json))

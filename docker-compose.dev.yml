@@ -13,6 +13,11 @@ services:
       POSTGRES_USER: dshur
       POSTGRES_PASSWORD: 1234
       POSTGRES_DB: productivity
+  redis:
+    image: redis:5.0.8
+    container_name: redis
+    ports:
+      - 6379:6379
 
 volumes:
   postgres_productivity:

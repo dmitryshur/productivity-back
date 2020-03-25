@@ -4,22 +4,37 @@ extern crate log;
 extern crate serde_json;
 
 use account::account_controllers::{account_login, account_register};
-use actix_session::CookieSession;
-use actix_web::{cookie, middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
 use postgres;
-use r2d2::Pool;
+use postgres::NoTls;
+use r2d2::{self, Pool};
 use r2d2_postgres::PostgresConnectionManager;
+use redis;
+use std::sync::Arc;
 use todos::todo_controllers::{todo_create, todo_delete, todo_edit, todo_get};
 
 mod account;
 mod common;
 mod todos;
 
-const MONTH_IN_SECONDS: i64 = 2592000;
-
-#[derive(Debug)]
 pub struct AppState {
     db_pool: Pool<PostgresConnectionManager<postgres::NoTls>>,
+    redis_client: Arc<redis::Client>,
+}
+
+fn create_db_pool() -> Result<Pool<PostgresConnectionManager<NoTls>>, r2d2::Error> {
+    let db_manager = PostgresConnectionManager::new(
+        "host=localhost user=dshur dbname=productivity password=1234"
+            .parse()
+            .unwrap(),
+        postgres::NoTls,
+    );
+
+    Pool::new(db_manager)
+}
+
+fn create_redis_client() -> redis::RedisResult<redis::Client> {
+    redis::Client::open("redis://127.0.0.1:6379")
 }
 
 #[actix_rt::main]
@@ -28,25 +43,29 @@ async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
     env_logger::init();
 
-    let manager = PostgresConnectionManager::new(
-        "host=localhost user=dshur dbname=productivity password=1234"
-            .parse()
-            .unwrap(),
-        postgres::NoTls,
-    );
-    let pool = Pool::new(manager).unwrap();
+    let db_pool = match create_db_pool() {
+        Ok(pool) => pool,
+        Err(err) => {
+            warn!(target: "warnings", "Warn: {:?}", err);
+            panic!();
+        }
+    };
+
+    let redis_client = match create_redis_client() {
+        Ok(client) => Arc::new(client),
+        Err(err) => {
+            warn!(target: "warnings", "Warn: {:?}", err);
+            panic!();
+        }
+    };
 
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .wrap(
-                CookieSession::private(&[0; 32])
-                    .http_only(true)
-                    .max_age(MONTH_IN_SECONDS)
-                    .same_site(cookie::SameSite::Strict)
-                    .secure(false),
-            )
-            .data(AppState { db_pool: pool.clone() })
+            .data(AppState {
+                db_pool: db_pool.clone(),
+                redis_client: redis_client.clone(),
+            })
             .service(
                 web::scope("/api/todo")
                     .route("/create", web::post().to(todo_create))

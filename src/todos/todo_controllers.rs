@@ -2,7 +2,6 @@ use crate::account::account_models::DbErrors;
 use crate::common::responses::ServerResponse;
 use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
-use actix_session::Session;
 use actix_web::{self, dev, error, http, web};
 use chrono::prelude::*;
 use postgres;
@@ -105,13 +104,7 @@ impl error::ResponseError for TodoGeneralErrors {
 pub async fn todo_create(
     request: web::Json<TodoCreateRequest>,
     state: web::Data<AppState>,
-    session: Session,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
-    let account_id = session.get::<i32>("account_id")?;
-    if account_id.is_none() || account_id.unwrap() != request.account_id {
-        return Err(TodoGeneralErrors::Forbidden);
-    }
-
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
@@ -155,13 +148,7 @@ pub async fn todo_create(
 pub async fn todo_get(
     request: web::Json<TodoGetRequest>,
     state: web::Data<AppState>,
-    session: Session,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
-    let account_id = session.get::<i32>("account_id")?;
-    if account_id.is_none() || account_id.unwrap() != request.account_id {
-        return Err(TodoGeneralErrors::Forbidden);
-    }
-
     let pool = state.db_pool.clone();
 
     let rows = web::block(move || {
@@ -209,13 +196,7 @@ pub async fn todo_get(
 pub async fn todo_edit(
     request: web::Json<TodoEditRequest>,
     state: web::Data<AppState>,
-    session: Session,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
-    let account_id = session.get::<i32>("account_id")?;
-    if account_id.is_none() || account_id.unwrap() != request.account_id {
-        return Err(TodoGeneralErrors::Forbidden);
-    }
-
     let pool = state.db_pool.clone();
     let todo_id = request.id;
 
@@ -269,13 +250,7 @@ pub async fn todo_edit(
 pub async fn todo_delete(
     request: web::Json<TodoDeleteRequest>,
     state: web::Data<AppState>,
-    session: Session,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
-    let account_id = session.get::<i32>("account_id")?;
-    if account_id.is_none() || account_id.unwrap() != request.account_id {
-        return Err(TodoGeneralErrors::Forbidden);
-    }
-
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
