@@ -1,10 +1,12 @@
 use crate::account::account_models::DbErrors;
+use crate::common::guards::Guard;
 use crate::common::responses::ServerResponse;
 use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
-use actix_web::{self, dev, error, http, web};
+use actix_web::{self, dev, error, http, web, HttpRequest};
 use chrono::prelude::*;
 use postgres;
+use redis::RedisError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -60,39 +62,37 @@ pub struct TodoDeleteResponse {
 }
 
 #[derive(Debug)]
-pub enum TodoGeneralErrors {
-    Db(postgres::Error),
+pub enum TodoErrors {
     Forbidden,
+    Db(postgres::Error),
     Server,
 }
 
-impl From<error::Error> for TodoGeneralErrors {
-    fn from(err: error::Error) -> TodoGeneralErrors {
-        match err {
-            _ => TodoGeneralErrors::Forbidden,
-        }
+impl From<RedisError> for TodoErrors {
+    fn from(_: RedisError) -> Self {
+        TodoErrors::Forbidden
     }
 }
 
-impl std::fmt::Display for TodoGeneralErrors {
+impl std::fmt::Display for TodoErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl error::ResponseError for TodoGeneralErrors {
+impl error::ResponseError for TodoErrors {
     fn status_code(&self) -> http::StatusCode {
         match *self {
-            TodoGeneralErrors::Forbidden => http::StatusCode::FORBIDDEN,
+            TodoErrors::Forbidden => http::StatusCode::FORBIDDEN,
             _ => http::StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
     fn error_response(&self) -> actix_web::HttpResponse {
         let response_json = match self {
-            TodoGeneralErrors::Forbidden => ServerResponse::new((), json!({"error": "Access forbidden"})),
-            TodoGeneralErrors::Server => ServerResponse::new((), json!({"error": "Interval server error"})),
-            TodoGeneralErrors::Db(_e) => ServerResponse::new((), json!({"error": "DB error"})),
+            TodoErrors::Forbidden => ServerResponse::new((), json!({"error": "Access forbidden"})),
+            TodoErrors::Server => ServerResponse::new((), json!({"error": "Interval server error"})),
+            TodoErrors::Db(_e) => ServerResponse::new((), json!({"error": "DB error"})),
         };
 
         dev::HttpResponseBuilder::new(self.status_code())
@@ -102,17 +102,20 @@ impl error::ResponseError for TodoGeneralErrors {
 }
 
 pub async fn todo_create(
-    request: web::Json<TodoCreateRequest>,
+    request: HttpRequest,
+    body: web::Json<TodoCreateRequest>,
     state: web::Data<AppState>,
-) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
+) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    Guard::auth(&request, &state, body.account_id).await?;
+
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
         let current_date = Utc::now();
         TodoDbExecutor::new(connection).create(&[
-            &request.account_id,
-            &request.title,
-            &request.body,
+            &body.account_id,
+            &body.title,
+            &body.body,
             &current_date,
             &current_date,
         ])
@@ -138,22 +141,24 @@ pub async fn todo_create(
             warn!(target: "warnings", "Warn: {:?}", err);
 
             match err {
-                DbErrors::Postgres(e) => Err(TodoGeneralErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoGeneralErrors::Server),
+                DbErrors::Postgres(e) => Err(TodoErrors::Db(e)),
+                DbErrors::Runtime => Err(TodoErrors::Server),
             }
         }
     }
 }
 
 pub async fn todo_get(
-    request: web::Json<TodoGetRequest>,
+    request: HttpRequest,
+    body: web::Json<TodoGetRequest>,
     state: web::Data<AppState>,
-) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
-    let pool = state.db_pool.clone();
+) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    Guard::auth(&request, &state, body.account_id).await?;
 
+    let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).get(&[&request.account_id, &request.offset, &request.limit])
+        TodoDbExecutor::new(connection).get(&[&body.account_id, &body.offset, &body.limit])
     })
     .await
     .map_err(|e| match e {
@@ -186,30 +191,33 @@ pub async fn todo_get(
             warn!(target: "warnings", "Warn: {:?}", err);
 
             match err {
-                DbErrors::Postgres(e) => Err(TodoGeneralErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoGeneralErrors::Server),
+                DbErrors::Postgres(e) => Err(TodoErrors::Db(e)),
+                DbErrors::Runtime => Err(TodoErrors::Server),
             }
         }
     }
 }
 
 pub async fn todo_edit(
-    request: web::Json<TodoEditRequest>,
+    request: HttpRequest,
+    body: web::Json<TodoEditRequest>,
     state: web::Data<AppState>,
-) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
+) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    Guard::auth(&request, &state, body.account_id).await?;
+
     let pool = state.db_pool.clone();
-    let todo_id = request.id;
+    let todo_id = body.id;
 
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
         let current_date = Utc::now();
         TodoDbExecutor::new(connection).edit(&[
-            &request.title,
-            &request.body,
-            &request.done,
+            &body.title,
+            &body.body,
+            &body.done,
             &current_date,
-            &request.account_id,
-            &request.id,
+            &body.account_id,
+            &body.id,
         ])
     })
     .await
@@ -240,21 +248,24 @@ pub async fn todo_edit(
             warn!(target: "warnings", "Warn: {:?}", err);
 
             match err {
-                DbErrors::Postgres(e) => Err(TodoGeneralErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoGeneralErrors::Server),
+                DbErrors::Postgres(e) => Err(TodoErrors::Db(e)),
+                DbErrors::Runtime => Err(TodoErrors::Server),
             }
         }
     }
 }
 
 pub async fn todo_delete(
-    request: web::Json<TodoDeleteRequest>,
+    request: HttpRequest,
+    body: web::Json<TodoDeleteRequest>,
     state: web::Data<AppState>,
-) -> actix_web::Result<actix_web::HttpResponse, TodoGeneralErrors> {
+) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    Guard::auth(&request, &state, body.account_id).await?;
+
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).delete(&[&request.account_id, &request.todos])
+        TodoDbExecutor::new(connection).delete(&[&body.account_id, &body.todos])
     })
     .await
     .map_err(|e| match e {
@@ -274,8 +285,8 @@ pub async fn todo_delete(
             warn!(target: "warnings", "Warn: {:?}", err);
 
             match err {
-                DbErrors::Postgres(e) => Err(TodoGeneralErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoGeneralErrors::Server),
+                DbErrors::Postgres(e) => Err(TodoErrors::Db(e)),
+                DbErrors::Runtime => Err(TodoErrors::Server),
             }
         }
     }

@@ -5,13 +5,13 @@ extern crate serde_json;
 
 use account::account_controllers::{account_login, account_register};
 use actix_web::{middleware, web, App, HttpServer};
-use postgres;
-use postgres::NoTls;
+use postgres::{self, NoTls};
 use r2d2::{self, Pool};
 use r2d2_postgres::PostgresConnectionManager;
 use redis;
 use std::sync::Arc;
 use todos::todo_controllers::{todo_create, todo_delete, todo_edit, todo_get};
+use tokio::sync::Mutex;
 
 mod account;
 mod common;
@@ -19,7 +19,7 @@ mod todos;
 
 pub struct AppState {
     db_pool: Pool<PostgresConnectionManager<postgres::NoTls>>,
-    redis_client: Arc<redis::Client>,
+    redis_client: Arc<Mutex<redis::aio::Connection>>,
 }
 
 fn create_db_pool() -> Result<Pool<PostgresConnectionManager<NoTls>>, r2d2::Error> {
@@ -33,8 +33,11 @@ fn create_db_pool() -> Result<Pool<PostgresConnectionManager<NoTls>>, r2d2::Erro
     Pool::new(db_manager)
 }
 
-fn create_redis_client() -> redis::RedisResult<redis::Client> {
-    redis::Client::open("redis://127.0.0.1:6379")
+async fn create_redis_client() -> redis::RedisResult<redis::aio::Connection> {
+    let client = redis::Client::open("redis://127.0.0.1:6379")?;
+    let connection = client.get_async_connection().await;
+
+    connection
 }
 
 #[actix_rt::main]
@@ -51,8 +54,8 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let redis_client = match create_redis_client() {
-        Ok(client) => Arc::new(client),
+    let redis_client = match create_redis_client().await {
+        Ok(client) => Arc::new(Mutex::new(client)),
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
             panic!();

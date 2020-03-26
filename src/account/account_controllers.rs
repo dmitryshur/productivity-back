@@ -2,9 +2,12 @@ use crate::account::account_models::{AccountDbExecutor, DbErrors};
 use crate::common::responses::ServerResponse;
 use crate::common::validators::{ValidationErrors, Validator};
 use crate::AppState;
-use redis::AsyncCommands;
-use actix_web::{self, dev, error, http, web};
+use actix_web::{self, cookie, dev, error, http, web};
+use redis::{AsyncCommands, RedisError};
 use serde::{Deserialize, Serialize};
+use uuid;
+
+const MONTH_IN_SECONDS: i64 = 2628000;
 
 #[derive(Deserialize)]
 pub struct AccountRequest {
@@ -31,22 +34,6 @@ impl From<ValidationErrors> for AccountRegistrationErrors {
         match err {
             ValidationErrors::Email => AccountRegistrationErrors::InvalidEmail,
             ValidationErrors::Password => AccountRegistrationErrors::InvalidPassword,
-        }
-    }
-}
-
-impl From<ValidationErrors> for AccountLoginErrors {
-    fn from(err: ValidationErrors) -> AccountLoginErrors {
-        match err {
-            _ => AccountLoginErrors::InvalidInfo,
-        }
-    }
-}
-
-impl From<error::Error> for AccountLoginErrors {
-    fn from(err: error::Error) -> AccountLoginErrors {
-        match err {
-            _ => AccountLoginErrors::Server,
         }
     }
 }
@@ -94,6 +81,30 @@ pub enum AccountLoginErrors {
     Server,
 }
 
+impl From<ValidationErrors> for AccountLoginErrors {
+    fn from(err: ValidationErrors) -> AccountLoginErrors {
+        match err {
+            _ => AccountLoginErrors::InvalidInfo,
+        }
+    }
+}
+
+impl From<error::Error> for AccountLoginErrors {
+    fn from(err: error::Error) -> AccountLoginErrors {
+        match err {
+            _ => AccountLoginErrors::Server,
+        }
+    }
+}
+
+impl From<RedisError> for AccountLoginErrors {
+    fn from(err: RedisError) -> AccountLoginErrors {
+        match err {
+            _ => AccountLoginErrors::Server,
+        }
+    }
+}
+
 impl std::fmt::Display for AccountLoginErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
@@ -121,16 +132,16 @@ impl error::ResponseError for AccountLoginErrors {
 }
 
 pub async fn account_register(
-    request: web::Json<AccountRequest>,
+    body: web::Json<AccountRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, AccountRegistrationErrors> {
-    Validator::email(&request.email)?;
-    Validator::password(&request.password)?;
+    Validator::email(&body.email)?;
+    Validator::password(&body.password)?;
 
     let pool = state.db_pool.clone();
     let rows_count = web::block(move || {
         let connection = pool.get().unwrap();
-        AccountDbExecutor::new(connection).register(&[&request.email, &request.password])
+        AccountDbExecutor::new(connection).register(&[&body.email, &body.password])
     })
     .await
     .map_err(|e| match e {
@@ -158,23 +169,16 @@ pub async fn account_register(
 }
 
 pub async fn account_login(
-    request: web::Json<AccountRequest>,
+    body: web::Json<AccountRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, AccountLoginErrors> {
-    Validator::email(&request.email)?;
-    Validator::password(&request.password)?;
+    Validator::email(&body.email)?;
+    Validator::password(&body.password)?;
 
-    let mut redis_connection = state
-        .redis_client
-        .get_async_connection()
-        .await
-        .expect("Can't get redis connection");
-
-    let _ : () = redis_connection.set("key1", 42).await.expect("Can't set key");
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        AccountDbExecutor::new(connection).login(&[&request.email, &request.password])
+        AccountDbExecutor::new(connection).login(&[&body.email, &body.password])
     })
     .await
     .map_err(|e| match e {
@@ -189,9 +193,20 @@ pub async fn account_login(
             }
             let row = &rows[0];
             let account_id: i32 = row.get("id");
+            let session_id = uuid::Uuid::new_v4().to_string();
+            let _: () = state.redis_client.lock().await.set(account_id, &session_id).await?;
+
+            let response_cookie = http::CookieBuilder::new("session_id", session_id)
+                .max_age(MONTH_IN_SECONDS)
+                .secure(false)
+                .same_site(cookie::SameSite::Strict)
+                .http_only(true)
+                .finish();
 
             let response_json = ServerResponse::new(AccountLoginResponse { account_id }, ());
-            Ok(actix_web::HttpResponse::Ok().json(response_json))
+            Ok(actix_web::HttpResponse::Ok()
+                .cookie(response_cookie)
+                .json(response_json))
         }
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
