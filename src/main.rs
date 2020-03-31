@@ -15,6 +15,7 @@ use tokio::sync::Mutex;
 
 mod account;
 mod common;
+mod middlewares;
 mod todos;
 
 pub struct AppState {
@@ -71,6 +72,7 @@ async fn main() -> std::io::Result<()> {
             })
             .service(
                 web::scope("/api/todo")
+                    .wrap(middlewares::auth::Authentication)
                     .route("/create", web::post().to(todo_create))
                     .route("/get", web::get().to(todo_get))
                     .route("/edit", web::post().to(todo_edit))

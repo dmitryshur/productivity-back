@@ -1,15 +1,13 @@
 use crate::account::account_models::DbErrors;
-use crate::common::guards::Guard;
 use crate::common::responses::ServerResponse;
 use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
-use actix_web::{self, dev, error, http, web, HttpRequest};
+use actix_web::{self, dev, error, http, web};
 use chrono::prelude::*;
 use postgres;
-use redis::RedisError;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TodoCreateRequest {
     account_id: i32,
     title: String,
@@ -63,15 +61,8 @@ pub struct TodoDeleteResponse {
 
 #[derive(Debug)]
 pub enum TodoErrors {
-    Forbidden,
     Db(postgres::Error),
     Server,
-}
-
-impl From<RedisError> for TodoErrors {
-    fn from(_: RedisError) -> Self {
-        TodoErrors::Forbidden
-    }
 }
 
 impl std::fmt::Display for TodoErrors {
@@ -83,14 +74,12 @@ impl std::fmt::Display for TodoErrors {
 impl error::ResponseError for TodoErrors {
     fn status_code(&self) -> http::StatusCode {
         match *self {
-            TodoErrors::Forbidden => http::StatusCode::FORBIDDEN,
             _ => http::StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
     fn error_response(&self) -> actix_web::HttpResponse {
         let response_json = match self {
-            TodoErrors::Forbidden => ServerResponse::new((), json!({"error": "Access forbidden"})),
             TodoErrors::Server => ServerResponse::new((), json!({"error": "Interval server error"})),
             TodoErrors::Db(_e) => ServerResponse::new((), json!({"error": "DB error"})),
         };
@@ -102,12 +91,9 @@ impl error::ResponseError for TodoErrors {
 }
 
 pub async fn todo_create(
-    request: HttpRequest,
     body: web::Json<TodoCreateRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
-    Guard::auth(&request, &state, body.account_id).await?;
-
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
@@ -149,12 +135,9 @@ pub async fn todo_create(
 }
 
 pub async fn todo_get(
-    request: HttpRequest,
     body: web::Json<TodoGetRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
-    Guard::auth(&request, &state, body.account_id).await?;
-
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
@@ -199,12 +182,9 @@ pub async fn todo_get(
 }
 
 pub async fn todo_edit(
-    request: HttpRequest,
     body: web::Json<TodoEditRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
-    Guard::auth(&request, &state, body.account_id).await?;
-
     let pool = state.db_pool.clone();
     let todo_id = body.id;
 
@@ -256,12 +236,9 @@ pub async fn todo_edit(
 }
 
 pub async fn todo_delete(
-    request: HttpRequest,
     body: web::Json<TodoDeleteRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
-    Guard::auth(&request, &state, body.account_id).await?;
-
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
