@@ -1,27 +1,16 @@
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate serde_json;
 
-use account::account_controllers::{account_login, account_register};
 use actix_web::{middleware, web, App, HttpServer};
 use postgres::{self, NoTls};
+use productivity::account::account_controllers::{account_login, account_register};
+use productivity::todos::todo_controllers::{todo_create, todo_delete, todo_edit, todo_get};
+use productivity::{middlewares, AppState};
 use r2d2::{self, Pool};
 use r2d2_postgres::PostgresConnectionManager;
 use redis;
 use std::sync::Arc;
-use todos::todo_controllers::{todo_create, todo_delete, todo_edit, todo_get};
 use tokio::sync::Mutex;
-
-mod account;
-mod common;
-mod middlewares;
-mod todos;
-
-pub struct AppState {
-    db_pool: Pool<PostgresConnectionManager<postgres::NoTls>>,
-    redis_client: Arc<Mutex<redis::aio::Connection>>,
-}
 
 fn create_db_pool() -> Result<Pool<PostgresConnectionManager<NoTls>>, r2d2::Error> {
     let db_manager = PostgresConnectionManager::new(
