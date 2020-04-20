@@ -1,4 +1,4 @@
-FROM postgres:12.2
+FROM rust:1.42.0
 
 RUN apt-get update \
     && apt-get install curl lsb-release -y \
@@ -6,3 +6,6 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install migrate=4.9.1 -y
 
+WORKDIR /usr/src/productivity_back
+
+COPY . .
