@@ -40,7 +40,7 @@ async fn main() -> std::io::Result<()> {
         Ok(pool) => pool,
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
-            panic!();
+            panic!(err);
         }
     };
 
@@ -48,7 +48,7 @@ async fn main() -> std::io::Result<()> {
         Ok(client) => Arc::new(Mutex::new(client)),
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
-            panic!();
+            panic!(err);
         }
     };
 
