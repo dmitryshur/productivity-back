@@ -16,7 +16,6 @@ mod tests {
     fn test_account() {
         let db_pool = common::create_db_pool().expect("Can't create db pool");
         let db_pool = Pool::clone(&db_pool);
-        println!("{:?}", db_pool);
 
         actix_rt::System::new("test_account_runtime".to_string()).block_on(async move {
             let redis_client = common::create_redis_client()
@@ -27,17 +26,52 @@ mod tests {
             let mut app = test::init_service(
                 App::new()
                     .data(AppState { db_pool, redis_client })
-                    .configure(common::config_app),
+                    .configure(common::test_config_app),
             )
             .await;
 
+            // Initial registration
             let payload = r#"{"email":"dimashur20@gmail.com","password":"12345678"}"#.as_bytes();
             let request = test::TestRequest::post()
                 .uri("/api/account/register")
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .set_payload(payload)
                 .to_request();
+            let response = app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
 
+            // Registration with the same credentials
+            let payload = r#"{"email":"dimashur20@gmail.com","password":"12345678"}"#.as_bytes();
+            let request = test::TestRequest::post()
+                .uri("/api/account/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .set_payload(payload)
+                .to_request();
+            let response = app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::CONFLICT);
+
+            // Invalid email
+            let payload = r#"{"email":"dimashur","password":"12345678"}"#.as_bytes();
+            let request = test::TestRequest::post()
+                .uri("/api/account/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .set_payload(payload)
+                .to_request();
+            let response = app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+            // Invalid password
+            let payload = r#"{"email":"dimashur2@gmail.com","password":"1234"}"#.as_bytes();
+            let request = test::TestRequest::post()
+                .uri("/api/account/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .set_payload(payload)
+                .to_request();
+            let response = app.call(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+            // Delete all the created data. USED IN TESTS ONLY
+            let request = test::TestRequest::post().uri("/api/account/reset").to_request();
             let response = app.call(request).await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);
         });

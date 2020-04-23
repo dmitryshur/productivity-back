@@ -218,3 +218,30 @@ pub async fn account_login(
         }
     }
 }
+
+pub async fn accounts_reset(
+    state: web::Data<AppState>,
+) -> actix_web::Result<actix_web::HttpResponse, AccountLoginErrors> {
+    let pool = state.db_pool.clone();
+    let result = web::block(move || {
+        let connection = pool.get().unwrap();
+        AccountDbExecutor::new(connection).reset()
+    })
+    .await
+    .map_err(|e| match e {
+        error::BlockingError::Error(e) => DbErrors::Postgres(e),
+        error::BlockingError::Canceled => DbErrors::Runtime,
+    });
+
+    match result {
+        Ok(_) => Ok(actix_web::HttpResponse::Ok().finish()),
+        Err(err) => {
+            warn!(target: "warnings", "Warn: {:?}", err);
+
+            return match err {
+                DbErrors::Runtime => Err(AccountLoginErrors::Server),
+                DbErrors::Postgres(_err) => Err(AccountLoginErrors::Server),
+            };
+        }
+    }
+}

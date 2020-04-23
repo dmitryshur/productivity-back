@@ -1,17 +1,14 @@
 use actix_web::web;
 use postgres;
+use productivity::{account::account_controllers, middlewares, todos::todo_controllers};
 use r2d2;
 use r2d2_postgres::PostgresConnectionManager;
 use redis;
-
-use postgres::Config;
-use productivity::{account::account_controllers, middlewares, todos::todo_controllers};
 use redis::ConnectionLike;
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
+use std::{sync::mpsc, thread, time::Duration};
 
-pub fn config_app(config: &mut web::ServiceConfig) {
+#[cfg(test)]
+pub fn test_config_app(config: &mut web::ServiceConfig) {
     config
         .service(
             web::scope("/api/todo")
@@ -24,12 +21,13 @@ pub fn config_app(config: &mut web::ServiceConfig) {
         .service(
             web::scope("/api/account")
                 .route("/register", web::post().to(account_controllers::account_register))
-                .route("/login", web::post().to(account_controllers::account_login)),
+                .route("/login", web::post().to(account_controllers::account_login))
+                .route("/reset", web::post().to(account_controllers::accounts_reset)),
         );
 }
 
 pub fn create_db_pool() -> Result<r2d2::Pool<PostgresConnectionManager<postgres::NoTls>>, r2d2::Error> {
-    panic_after(Duration::from_secs(2), "DB timeout", || {
+    panic_after(Duration::from_secs(5), "DB timeout", || {
         let db_manager = PostgresConnectionManager::new(
             "host=localhost user=dshur dbname=productivity password=1234"
                 .parse()
