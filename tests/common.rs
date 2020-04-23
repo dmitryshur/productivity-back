@@ -1,3 +1,4 @@
+use actix_http::http::header::HeaderMap;
 use actix_web::web;
 use postgres;
 use productivity::{account::account_controllers, middlewares, todos::todo_controllers};
@@ -5,6 +6,7 @@ use r2d2;
 use r2d2_postgres::PostgresConnectionManager;
 use redis;
 use redis::ConnectionLike;
+use regex::Regex;
 use std::{sync::mpsc, thread, time::Duration};
 
 #[cfg(test)]
@@ -48,6 +50,21 @@ pub async fn create_redis_client() -> redis::RedisResult<redis::aio::Connection>
     let connection = client.get_async_connection().await;
 
     connection
+}
+
+pub fn get_session_id(response_headers: &HeaderMap) -> &str {
+    let cookie_regex = Regex::new(r###"session_id=(.+?);"###).expect("Couldn't create email regex");
+    let mut session_id = "";
+
+    for (_, val) in response_headers.iter() {
+        let cookie_str = val.to_str().expect("Can't parse cookie");
+        let caps = cookie_regex.captures(cookie_str);
+        if let Some(groups) = caps {
+            session_id = groups.get(1).unwrap().as_str();
+        }
+    }
+
+    session_id
 }
 
 fn panic_after<T, F>(d: Duration, message: &'static str, f: F) -> T
