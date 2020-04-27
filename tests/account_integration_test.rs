@@ -1,5 +1,8 @@
 mod common;
 
+#[macro_use]
+extern crate serde_json;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -8,7 +11,7 @@ mod tests {
     use actix_service::Service;
     use actix_web::{http, test, App};
     use productivity::AppState;
-    use r2d2::{self, Pool};
+    use r2d2::Pool;
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -36,43 +39,43 @@ mod tests {
             assert_eq!(response.status(), StatusCode::OK);
 
             // Initial registration
-            let payload = r#"{"email":"dimashur@gmail.com","password":"12345678"}"#.as_bytes();
+            let payload = json!({"email": "dimashur@gmail.com", "password": "12345678"});
             let request = test::TestRequest::post()
                 .uri("/api/account/register")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::OK);
 
             // Registration with the same credentials
-            let payload = r#"{"email":"dimashur@gmail.com","password":"12345678"}"#.as_bytes();
+            let payload = json!({"email": "dimashur@gmail.com", "password": "12345678"});
             let request = test::TestRequest::post()
                 .uri("/api/account/register")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::CONFLICT);
 
             // Invalid email
-            let payload = r#"{"email":"dimashur2","password":"12345678"}"#.as_bytes();
+            let payload = json!({"email": "dimashur2", "password": "12345678"});
             let request = test::TestRequest::post()
                 .uri("/api/account/register")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
             // Invalid password
-            let payload = r#"{"email":"dimashur2@gmail.com","password":"1234"}"#.as_bytes();
+            let payload = json!({"email": "dimashur2@gmail.com", "password": "1234"});
             let request = test::TestRequest::post()
                 .uri("/api/account/register")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
         });
     }
@@ -97,57 +100,57 @@ mod tests {
 
             // Delete all existing data. USED IN TESTS ONLY
             let request = test::TestRequest::post().uri("/api/account/reset").to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::OK);
 
             // Initial registration
-            let payload = r#"{"email":"dimashur@gmail.com","password":"12345678"}"#.as_bytes();
+            let payload = json!({"email": "dimashur@gmail.com", "password": "12345678"});
             let request = test::TestRequest::post()
                 .uri("/api/account/register")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::OK);
 
             // Invalid email
-            let payload = r#"{"email":"dimashur","password":"12345678"}"#.as_bytes();
+            let payload = json!({"email": "dimashur", "password": "12345678"});
             let request = test::TestRequest::post()
                 .uri("/api/account/login")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
             // Invalid password
-            let payload = r#"{"email":"dimashur@gmail.com","password":"1234"}"#.as_bytes();
+            let payload = json!({"email": "dimashur@gmail.com", "password": "1234"});
             let request = test::TestRequest::post()
                 .uri("/api/account/login")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
             // Wrong credentials provided
-            let payload = r#"{"email":"dimashur1@gmail.com","password":"12345678"}"#.as_bytes();
+            let payload = json!({"email": "dimashur1@gmail.com", "password": "12345678"});
             let request = test::TestRequest::post()
                 .uri("/api/account/login")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
             // Successful login
-            let payload = r#"{"email":"dimashur@gmail.com","password":"12345678"}"#.as_bytes();
+            let payload = json!({"email": "dimashur@gmail.com", "password": "12345678"});
             let request = test::TestRequest::post()
                 .uri("/api/account/login")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .set_payload(payload)
+                .set_payload(payload.to_string())
                 .to_request();
-            let response = app.call(request).await.unwrap();
+            let response = test::call_service(&mut app, request).await;
             let session_id = common::get_session_id(&response.headers());
             assert_eq!(response.status(), StatusCode::OK);
             assert_eq!(session_id.len() > 0, true);

@@ -110,4 +110,12 @@ impl TodoDbExecutor {
 
         Ok(rows)
     }
+
+    pub fn reset(&mut self) -> Result<(), postgres::Error> {
+        let mut transaction = self.connection.transaction()?;
+        let _rows = transaction.execute("DELETE FROM todo", &[])?;
+        transaction.commit()?;
+
+        Ok(())
+    }
 }

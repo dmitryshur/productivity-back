@@ -268,3 +268,28 @@ pub async fn todo_delete(
         }
     }
 }
+
+pub async fn todo_reset(state: web::Data<AppState>) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    let pool = state.db_pool.clone();
+    let result = web::block(move || {
+        let connection = pool.get().unwrap();
+        TodoDbExecutor::new(connection).reset()
+    })
+    .await
+    .map_err(|e| match e {
+        error::BlockingError::Error(e) => DbErrors::Postgres(e),
+        error::BlockingError::Canceled => DbErrors::Runtime,
+    });
+
+    match result {
+        Ok(_) => Ok(actix_web::HttpResponse::Ok().finish()),
+        Err(err) => {
+            warn!(target: "warnings", "Warn: {:?}", err);
+
+            return match err {
+                DbErrors::Runtime => Err(TodoErrors::Server),
+                DbErrors::Postgres(_err) => Err(TodoErrors::Server),
+            };
+        }
+    }
+}

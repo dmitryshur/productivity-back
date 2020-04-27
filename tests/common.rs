@@ -18,7 +18,8 @@ pub fn test_config_app(config: &mut web::ServiceConfig) {
                 .route("/create", web::post().to(todo_controllers::todo_create))
                 .route("/get", web::get().to(todo_controllers::todo_get))
                 .route("/edit", web::post().to(todo_controllers::todo_edit))
-                .route("/delete", web::post().to(todo_controllers::todo_delete)),
+                .route("/delete", web::post().to(todo_controllers::todo_delete))
+                .route("/reset", web::post().to(todo_controllers::todo_reset)),
         )
         .service(
             web::scope("/api/account")
