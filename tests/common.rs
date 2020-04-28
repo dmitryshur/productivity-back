@@ -1,5 +1,5 @@
-use actix_http::http::header::HeaderMap;
-use actix_web::web;
+use actix_http::{body::MessageBody, http::header::HeaderMap};
+use actix_web::{dev::ServiceResponse, test, web};
 use postgres;
 use productivity::{account::account_controllers, middlewares, todos::todo_controllers};
 use r2d2;
@@ -7,6 +7,7 @@ use r2d2_postgres::PostgresConnectionManager;
 use redis;
 use redis::ConnectionLike;
 use regex::Regex;
+use serde_json::Value;
 use std::{sync::mpsc, thread, time::Duration};
 
 #[cfg(test)]
@@ -66,6 +67,15 @@ pub fn get_session_id(response_headers: &HeaderMap) -> &str {
     }
 
     session_id
+}
+
+#[allow(dead_code)]
+pub async fn get_response_body<B>(response: ServiceResponse<B>) -> Value
+where
+    B: MessageBody,
+{
+    let response_body = test::read_body(response).await;
+    serde_json::from_slice(response_body.as_ref()).expect("Can't parse to serde Value")
 }
 
 fn panic_after<T, F>(d: Duration, message: &'static str, f: F) -> T

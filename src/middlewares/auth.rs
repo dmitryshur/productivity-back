@@ -104,19 +104,35 @@ where
                 .value()
                 .to_string();
 
+            let account_id_cookie = req.cookie("account_id");
+
             // Get the body out of the request
             let mut body = BytesMut::new();
             let mut stream = req.take_payload();
             while let Some(chunk) = stream.next().await {
                 body.extend_from_slice(&chunk?);
             }
-            let request_body = serde_json::from_slice::<RequestBody>(&body).map_err(|_e| AuthErrors::Forbidden)?;
+            let request_body = serde_json::from_slice::<RequestBody>(&body);
+
+            // The account_id is read either from the body or from a cookie
+            let account_id;
+            match (account_id_cookie, request_body) {
+                (Some(id), _) => {
+                    account_id = id.value().parse::<i32>().map_err(|_e| AuthErrors::Forbidden)?;
+                }
+                (_, Ok(body)) => {
+                    account_id = body.account_id;
+                }
+                _ => {
+                    return Err(AuthErrors::Forbidden)?;
+                }
+            }
 
             let redis_client = state.redis_client.clone();
             let session_id: String = redis_client
                 .lock()
                 .await
-                .get(request_body.account_id)
+                .get(account_id)
                 .await
                 .map_err(|_e| AuthErrors::Forbidden)?;
 

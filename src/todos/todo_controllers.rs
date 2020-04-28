@@ -135,13 +135,13 @@ pub async fn todo_create(
 }
 
 pub async fn todo_get(
-    body: web::Json<TodoGetRequest>,
+    query: web::Query<TodoGetRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).get(&[&body.account_id, &body.offset, &body.limit])
+        TodoDbExecutor::new(connection).get(&[&query.account_id, &query.offset, &query.limit])
     })
     .await
     .map_err(|e| match e {
