@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 
 fn create_db_pool() -> Result<Pool<PostgresConnectionManager<NoTls>>, r2d2::Error> {
     let db_manager = PostgresConnectionManager::new(
-        "host=localhost user=dshur dbname=productivity password=1234"
+        "host=postgres user=dshur dbname=productivity password=1234"
             .parse()
             .unwrap(),
         postgres::NoTls,
@@ -24,8 +24,9 @@ fn create_db_pool() -> Result<Pool<PostgresConnectionManager<NoTls>>, r2d2::Erro
 }
 
 async fn create_redis_client() -> redis::RedisResult<redis::aio::Connection> {
-    let client = redis::Client::open("redis://127.0.0.1:6379")?;
+    let client = redis::Client::open("redis://redis:6379")?;
     let connection = client.get_async_connection().await;
+    println!("connected to redis");
 
     connection
 }
@@ -73,7 +74,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/login", web::post().to(account_login)),
             )
     })
-    .bind("127.0.0.1:5555")?
+    .bind("localhost:5555")?
     .run()
     .await
 }
