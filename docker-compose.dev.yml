@@ -6,19 +6,14 @@ services:
       context: ./
       target: development
     container_name: productivity_back
-    volumes:
-    - ./:/usr/src/productivity_back
     environment:
       POSTGRES_URL: "postgres://dshur:1234@postgres:5432/productivity?sslmode=disable"
-    ports:
-    - "5555:5555"
     depends_on:
       - postgres
   postgres:
     image: postgres:12.2
     container_name: postgres
     volumes:
-      - postgres_productivity:/var/lib/postgresql/data
       - ./db:/docker-entrypoint-initdb.d
     ports:
       - 5432:5432
@@ -31,6 +26,3 @@ services:
     container_name: redis
     ports:
       - 6379:6379
-
-volumes:
-  postgres_productivity:

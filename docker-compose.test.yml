@@ -3,19 +3,25 @@ version: '3.7'
 services:
   productivity_back:
     build:
-      context: .
-      target: builder
-    container_name: productivity_back
+      context: ./
+      target: test
     environment:
       POSTGRES_URL: "postgres://dshur:1234@postgres:5432/productivity?sslmode=disable"
-    command: sh -c 'env && ./wait-for-it.sh postgres:5432 -- migrate -database $${POSTGRES_URL} -path db/migrations up && cargo test -- --test-threads=1'
+      POSTGRES_HOST: "postgres"
+      POSTGRES_USER: "dshur"
+      POSTGRES_PASSWORD: "1234"
+      POSTGRES_DB: "productivity"
+      PRODUCTIVITY_HOST: "127.0.0.1"
+      PRODUCTIVITY_PORT: "5555"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+    ports:
+      - 5555:5555
     depends_on:
       - postgres
   postgres:
     image: postgres:12.2
-    container_name: postgres
     volumes:
-      - postgres_productivity:/var/lib/postgresql/data
       - ./db:/docker-entrypoint-initdb.d
     ports:
       - 5432:5432
@@ -25,9 +31,5 @@ services:
       POSTGRES_DB: productivity
   redis:
     image: redis:5.0.8
-    container_name: redis
     ports:
       - 6379:6379
-
-volumes:
-  postgres_productivity:

@@ -31,9 +31,14 @@ pub fn test_config_app(config: &mut web::ServiceConfig) {
 }
 
 pub fn create_db_pool() -> Result<r2d2::Pool<PostgresConnectionManager<postgres::NoTls>>, r2d2::Error> {
-    panic_after(Duration::from_secs(5), "DB timeout", || {
+    let host = std::env::var("POSTGRES_HOST").expect("POSTGRES_HOST variable missing");
+    let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER variable missing");
+    let db = std::env::var("POSTGRES_DB").expect("POSTGRES_DB variable missing");
+    let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD variable missing");
+
+    panic_after(Duration::from_secs(5), "DB timeout", move || {
         let db_manager = PostgresConnectionManager::new(
-            "host=localhost user=dshur dbname=productivity password=1234"
+            format!("host={} user={} dbname={} password={}", host, user, db, password)
                 .parse()
                 .unwrap(),
             postgres::NoTls,
@@ -44,7 +49,9 @@ pub fn create_db_pool() -> Result<r2d2::Pool<PostgresConnectionManager<postgres:
 }
 
 pub async fn create_redis_client() -> redis::RedisResult<redis::aio::Connection> {
-    let mut client = redis::Client::open("redis://127.0.0.1:6379")?;
+    let host = std::env::var("REDIS_HOST").expect("REDIS_HOST variable missing");
+    let port = std::env::var("REDIS_PORT").expect("REDIS_PORT variable missing");
+    let mut client = redis::Client::open(format!("redis://{}:{}", host, port))?;
     if !client.check_connection() {
         panic!("Can't connect to redis");
     }

@@ -8,10 +8,11 @@ RUN apt-get update \
 WORKDIR /usr/src/productivity_back
 COPY . .
 
-
 FROM base as development
 CMD ./wait-for-it.sh postgres:5432 -- migrate -database $POSTGRES_URL -path db/migrations up
 
+FROM base as test
+CMD ./wait-for-it.sh postgres:5432 -- migrate -database $POSTGRES_URL -path db/migrations up && cargo test -- --test-threads=1
 
 FROM base as production
 RUN cargo build --release
