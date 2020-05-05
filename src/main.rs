@@ -13,8 +13,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 fn create_db_pool() -> Result<Pool<PostgresConnectionManager<NoTls>>, r2d2::Error> {
+    let host = std::env::var("POSTGRES_HOST").expect("POSTGRES_HOST variable missing");
+    let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER variable missing");
+    let db = std::env::var("POSTGRES_DB").expect("POSTGRES_DB variable missing");
+    let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD variable missing");
+
     let db_manager = PostgresConnectionManager::new(
-        "host=postgres user=dshur dbname=productivity password=1234"
+        format!("host={} user={} dbname={} password={}", host, user, db, password)
             .parse()
             .unwrap(),
         postgres::NoTls,
@@ -24,9 +29,10 @@ fn create_db_pool() -> Result<Pool<PostgresConnectionManager<NoTls>>, r2d2::Erro
 }
 
 async fn create_redis_client() -> redis::RedisResult<redis::aio::Connection> {
-    let client = redis::Client::open("redis://redis:6379")?;
+    let host = std::env::var("REDIS_HOST").expect("REDIS_HOST variable missing");
+    let port = std::env::var("REDIS_PORT").expect("REDIS_PORT variable missing");
+    let client = redis::Client::open(format!("redis://{}:{}", host, port))?;
     let connection = client.get_async_connection().await;
-    println!("connected to redis");
 
     connection
 }
@@ -35,6 +41,10 @@ async fn create_redis_client() -> redis::RedisResult<redis::aio::Connection> {
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "warnings=warn,actix_web=info");
     std::env::set_var("RUST_BACKTRACE", "1");
+
+    let host = std::env::var("PRODUCTIVITY_HOST").expect("PRODUCTIVITY_HOST variable missing");
+    let port = std::env::var("PRODUCTIVITY_PORT").expect("PRODUCTIVITY_PORT variable missing");
+
     env_logger::init();
 
     let db_pool = match create_db_pool() {
@@ -74,7 +84,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/login", web::post().to(account_login)),
             )
     })
-    .bind("localhost:5555")?
+    .bind(format!("{}:{}", host, port))?
     .run()
     .await
 }
