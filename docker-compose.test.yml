@@ -6,6 +6,7 @@ services:
       context: ./
       target: test
     environment:
+      CARGO_HOME: ./.cargo
       POSTGRES_URL: "postgres://dshur:1234@postgres:5432/productivity?sslmode=disable"
       POSTGRES_HOST: "postgres"
       POSTGRES_USER: "dshur"

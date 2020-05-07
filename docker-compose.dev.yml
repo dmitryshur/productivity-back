@@ -11,6 +11,7 @@ services:
     - ./:/usr/src/productivity_back
     command: sh -c './wait-for-it.sh postgres:5432 -- migrate -database $${POSTGRES_URL} -path db/migrations up && /bin/bash'
     environment:
+      CARGO_HOME: ./.cargo
       POSTGRES_URL: "postgres://dshur:1234@postgres:5432/productivity?sslmode=disable"
       PRODUCTIVITY_HOST: 0.0.0.0
       PRODUCTIVITY_PORT: 5555
