@@ -4,16 +4,31 @@ services:
   productivity_back:
     build:
       context: ./
-      target: development
+      target: base
     container_name: productivity_back
+    tty: true
+    volumes:
+    - ./:/usr/src/productivity_back
+    command: sh -c './wait-for-it.sh postgres:5432 -- migrate -database $${POSTGRES_URL} -path db/migrations up && /bin/bash'
     environment:
       POSTGRES_URL: "postgres://dshur:1234@postgres:5432/productivity?sslmode=disable"
+      PRODUCTIVITY_HOST: 0.0.0.0
+      PRODUCTIVITY_PORT: 5555
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: dshur
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: productivity
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       - postgres
+    ports:
+    - 5555:5555
   postgres:
     image: postgres:12.2
     container_name: postgres
     volumes:
+      - postgres_productivity:/var/lib/postgresql/data
       - ./db:/docker-entrypoint-initdb.d
     ports:
       - 5432:5432
@@ -26,3 +41,6 @@ services:
     container_name: redis
     ports:
       - 6379:6379
+
+volumes:
+  postgres_productivity:
