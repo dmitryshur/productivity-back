@@ -6,14 +6,20 @@ cache:
 
 stages:
   - test
-  - deploy
+  - build
 
 test:
   stage: test
   script:
     - docker-compose -f docker-compose.test.yml up --abort-on-container-exit
 
-deploy:
-  stage: deploy
+build:
+  stage: build
+  before_script:
+    - docker login -u dimashur -p 8G9CZYuQX4aWrysMQBaz $CI_REGISTRY
+  after_script:
+    - docker logout $CI_REGISTRY
+    - echo "finished"
   script:
-    - echo "world"
+    - docker build -t $CI_REGISTRY/dimashur/productivity:latest --target production .
+    - docker push $CI_REGISTRY/dimashur/productivity:latest

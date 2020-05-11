@@ -1,0 +1,42 @@
+version: '3.7'
+
+services:
+  productivity_back:
+    build:
+      context: ./
+      target: production
+    environment:
+      CARGO_HOME: ./.cargo
+      POSTGRES_URL: "postgres://dshur:1234@postgres:5432/productivity?sslmode=disable"
+      PRODUCTIVITY_HOST: "postgres"
+      PRODUCTIVITY_PORT: 5555
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: dshur
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: productivity
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - postgres
+    ports:
+      - 5555:5555
+  postgres:
+    image: postgres:12.2
+    container_name: postgres
+    volumes:
+      - postgres_productivity:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: dshur
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: productivity
+  redis:
+    image: redis:5.0.8
+    container_name: redis
+    ports:
+      - 6379:6379
+
+volumes:
+  postgres_productivity:
