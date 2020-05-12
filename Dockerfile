@@ -12,6 +12,7 @@ FROM base as test
 CMD ./wait-for-it.sh postgres:5432 -- migrate -database $POSTGRES_URL -path db/migrations up && cargo test -- --test-threads=1
 
 FROM base as production
+EXPOSE 80
 RUN cargo build --release
 CMD ./wait-for-it.sh postgres:5432 -- migrate -database $POSTGRES_URL -path db/migrations up && ./target/release/productivity_bin
 
