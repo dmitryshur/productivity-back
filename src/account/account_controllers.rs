@@ -135,7 +135,6 @@ pub async fn account_register(
     body: web::Json<AccountRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, AccountRegistrationErrors> {
-    println!("in register");
     Validator::email(&body.email)?;
     Validator::password(&body.password)?;
 

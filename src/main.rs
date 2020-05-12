@@ -65,12 +65,12 @@ fn main() -> std::io::Result<()> {
         };
 
         HttpServer::new(move || {
+            let db_pool = Pool::clone(&db_pool);
+            let redis_client = Arc::clone(&redis_client);
+
             App::new()
                 .wrap(middleware::Logger::default())
-                .data(AppState {
-                    db_pool: db_pool.clone(),
-                    redis_client: redis_client.clone(),
-                })
+                .data(AppState { db_pool, redis_client })
                 .service(
                     web::scope("/api/todo")
                         .wrap(middlewares::auth::Authentication)

@@ -14,5 +14,5 @@ CMD ./wait-for-it.sh postgres:5432 -- migrate -database $POSTGRES_URL -path db/m
 FROM base as production
 EXPOSE 80
 RUN cargo build --release
-CMD ./wait-for-it.sh postgres:5432 -- migrate -database $POSTGRES_URL -path db/migrations up && ./target/release/productivity_bin
+CMD ./wait-for-it.sh postgres:5432 -- migrate -database $POSTGRES_URL -path db/migrations up && RUST_BACKTRACE=full ./target/release/productivity_bin
 
