@@ -2,28 +2,26 @@ use crate::account::account_models::DbErrors;
 use crate::common::responses::ServerResponse;
 use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
-use actix_web::{self, dev, error, http, web};
+use actix_http::httpmessage::HttpMessage;
+use actix_web::{self, dev, error, http, web, HttpRequest};
 use chrono::prelude::*;
 use postgres;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct TodoCreateRequest {
-    account_id: i32,
     title: String,
     body: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct TodoGetRequest {
-    account_id: i32,
     offset: Option<i64>,
     limit: Option<i64>,
 }
 
 #[derive(Deserialize)]
 pub struct TodoEditRequest {
-    account_id: i32,
     id: i32,
     title: Option<String>,
     body: Option<String>,
@@ -32,7 +30,6 @@ pub struct TodoEditRequest {
 
 #[derive(Deserialize)]
 pub struct TodoDeleteRequest {
-    account_id: i32,
     todos: Vec<i32>,
 }
 
@@ -91,20 +88,16 @@ impl error::ResponseError for TodoErrors {
 }
 
 pub async fn todo_create(
+    request: HttpRequest,
     body: web::Json<TodoCreateRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    let account_id = request.cookie("account_id").unwrap().value().parse::<i32>().unwrap();
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
         let current_date = Utc::now();
-        TodoDbExecutor::new(connection).create(&[
-            &body.account_id,
-            &body.title,
-            &body.body,
-            &current_date,
-            &current_date,
-        ])
+        TodoDbExecutor::new(connection).create(&[&account_id, &body.title, &body.body, &current_date, &current_date])
     })
     .await
     .map_err(|e| match e {
@@ -135,13 +128,15 @@ pub async fn todo_create(
 }
 
 pub async fn todo_get(
+    request: HttpRequest,
     query: web::Query<TodoGetRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    let account_id = request.cookie("account_id").unwrap().value().parse::<i32>().unwrap();
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).get(&[&query.account_id, &query.offset, &query.limit])
+        TodoDbExecutor::new(connection).get(&[&account_id, &query.offset, &query.limit])
     })
     .await
     .map_err(|e| match e {
@@ -182,9 +177,12 @@ pub async fn todo_get(
 }
 
 pub async fn todo_edit(
+    request: HttpRequest,
     body: web::Json<TodoEditRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    println!("test1");
+    let account_id = request.cookie("account_id").unwrap().value().parse::<i32>().unwrap();
     let pool = state.db_pool.clone();
     let todo_id = body.id;
 
@@ -196,7 +194,7 @@ pub async fn todo_edit(
             &body.body,
             &body.done,
             &current_date,
-            &body.account_id,
+            &account_id,
             &body.id,
         ])
     })
@@ -236,13 +234,15 @@ pub async fn todo_edit(
 }
 
 pub async fn todo_delete(
+    request: HttpRequest,
     body: web::Json<TodoDeleteRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
+    let account_id = request.cookie("account_id").unwrap().value().parse::<i32>().unwrap();
     let pool = state.db_pool.clone();
     let rows = web::block(move || {
         let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).delete(&[&body.account_id, &body.todos])
+        TodoDbExecutor::new(connection).delete(&[&account_id, &body.todos])
     })
     .await
     .map_err(|e| match e {

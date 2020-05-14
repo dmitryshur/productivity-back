@@ -70,7 +70,7 @@ mod tests {
             let request = test::TestRequest::post()
                 .uri("/api/todo/reset")
                 .cookie(Cookie::new("session_id", session_id.clone()))
-                .set_payload(json!({ "account_id": account_id }).to_string())
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
             let response = test::call_service(&mut app, request).await;
@@ -87,10 +87,11 @@ mod tests {
             assert_eq!(response.is_err(), true);
 
             // Create todos with cookie
-            let payload = json!({"account_id": account_id, "title": "hello", "body": "world"});
+            let payload = json!({"title": "hello", "body": "world"});
             let request = test::TestRequest::post()
                 .uri("/api/todo/create")
                 .cookie(Cookie::new("session_id", session_id.clone()))
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .set_payload(payload.to_string())
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
@@ -150,37 +151,40 @@ mod tests {
             let request = test::TestRequest::post()
                 .uri("/api/todo/reset")
                 .cookie(Cookie::new("session_id", session_id.clone()))
-                .set_payload(json!({ "account_id": account_id }).to_string())
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
             let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::OK);
 
             // Create todos with cookie
-            let payload = json!({"account_id": account_id, "title": "hello", "body": "world"});
+            let payload = json!({"title": "hello", "body": "world"});
             let request = test::TestRequest::post()
                 .uri("/api/todo/create")
                 .cookie(Cookie::new("session_id", session_id.clone()))
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .set_payload(payload.to_string())
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
             let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::OK);
 
-            let payload = json!({"account_id": account_id, "title": "hello", "body": "world"});
+            let payload = json!({"title": "hello", "body": "world"});
             let request = test::TestRequest::post()
                 .uri("/api/todo/create")
                 .cookie(Cookie::new("session_id", session_id.clone()))
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .set_payload(payload.to_string())
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
             let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::OK);
 
-            let payload = json!({"account_id": account_id, "title": "hello", "body": "world"});
+            let payload = json!({"title": "hello", "body": "world"});
             let request = test::TestRequest::post()
                 .uri("/api/todo/create")
                 .cookie(Cookie::new("session_id", session_id.clone()))
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .set_payload(payload.to_string())
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
@@ -189,7 +193,7 @@ mod tests {
 
             // Get all todos
             let request = test::TestRequest::get()
-                .uri(&format!("/api/todo/get?account_id={}", account_id))
+                .uri("/api/todo/get")
                 .cookie(Cookie::new("session_id", session_id.clone()))
                 .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
@@ -205,7 +209,7 @@ mod tests {
 
             // Get at most 2 todos
             let request = test::TestRequest::get()
-                .uri(&format!("/api/todo/get?account_id={}&limit=2", account_id))
+                .uri("/api/todo/get?limit=2")
                 .cookie(Cookie::new("session_id", session_id.clone()))
                 .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
@@ -221,7 +225,7 @@ mod tests {
 
             // Get at most 2 todos with an offset of 1
             let request = test::TestRequest::get()
-                .uri(&format!("/api/todo/get?account_id={}&limit=2&offset=1", account_id))
+                .uri("/api/todo/get?limit=2&offset=1")
                 .cookie(Cookie::new("session_id", session_id.clone()))
                 .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
@@ -288,17 +292,18 @@ mod tests {
             let request = test::TestRequest::post()
                 .uri("/api/todo/reset")
                 .cookie(Cookie::new("session_id", session_id.clone()))
-                .set_payload(json!({ "account_id": account_id }).to_string())
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
             let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::OK);
 
             // Create todos with cookie
-            let payload = json!({"account_id": account_id, "title": "hello", "body": "world"});
+            let payload = json!({"title": "hello", "body": "world"});
             let request = test::TestRequest::post()
                 .uri("/api/todo/create")
                 .cookie(Cookie::new("session_id", session_id.clone()))
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .set_payload(payload.to_string())
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
@@ -307,7 +312,7 @@ mod tests {
 
             // Get all todos
             let request = test::TestRequest::get()
-                .uri(&format!("/api/todo/get?account_id={}", account_id))
+                .uri("/api/todo/get")
                 .cookie(Cookie::new("session_id", session_id.clone()))
                 .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
@@ -321,11 +326,11 @@ mod tests {
             let todo_last_edit_date = todo["last_edit_date"].as_str().unwrap();
 
             // Edit one of the created todos
-            let payload =
-                json!({"account_id": account_id, "id": todo_id, "title": "edited_title", "body": "edited_body"});
+            let payload = json!({"id": todo_id, "title": "edited_title", "body": "edited_body"});
             let request = test::TestRequest::post()
                 .uri("/api/todo/edit")
                 .cookie(Cookie::new("session_id", session_id.clone()))
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .set_payload(payload.to_string())
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
@@ -342,7 +347,7 @@ mod tests {
 
             // Get all todos
             let request = test::TestRequest::get()
-                .uri(&format!("/api/todo/get?account_id={}", account_id))
+                .uri("/api/todo/get")
                 .cookie(Cookie::new("session_id", session_id.clone()))
                 .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
@@ -414,17 +419,18 @@ mod tests {
             let request = test::TestRequest::post()
                 .uri("/api/todo/reset")
                 .cookie(Cookie::new("session_id", session_id.clone()))
-                .set_payload(json!({ "account_id": account_id }).to_string())
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
             let response = test::call_service(&mut app, request).await;
             assert_eq!(response.status(), StatusCode::OK);
 
             // Create todos with cookie
-            let payload = json!({"account_id": account_id, "title": "hello", "body": "world"});
+            let payload = json!({"title": "hello", "body": "world"});
             let request = test::TestRequest::post()
                 .uri("/api/todo/create")
                 .cookie(Cookie::new("session_id", session_id.clone()))
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .set_payload(payload.to_string())
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
@@ -433,7 +439,7 @@ mod tests {
 
             // Get all todos
             let request = test::TestRequest::get()
-                .uri(&format!("/api/todo/get?account_id={}", account_id))
+                .uri("/api/todo/get")
                 .cookie(Cookie::new("session_id", session_id.clone()))
                 .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
@@ -446,10 +452,11 @@ mod tests {
             let todo_id = todo["id"].as_i64().unwrap();
 
             // Delete one of the todos
-            let payload = json!({"account_id": account_id, "todos": vec![todo_id]});
+            let payload = json!({ "todos": vec![todo_id] });
             let request = test::TestRequest::post()
                 .uri("/api/todo/delete")
                 .cookie(Cookie::new("session_id", session_id.clone()))
+                .cookie(Cookie::new("account_id", account_id.to_string()))
                 .set_payload(payload.to_string())
                 .header(http::header::CONTENT_TYPE, "application/json")
                 .to_request();
@@ -458,7 +465,7 @@ mod tests {
 
             // Get all todos after the delete. should be empty
             let request = test::TestRequest::get()
-                .uri(&format!("/api/todo/get?account_id={}", account_id))
+                .uri("/api/todo/get")
                 .cookie(Cookie::new("session_id", session_id.clone()))
                 .cookie(Cookie::new("account_id", account_id.to_string()))
                 .header(http::header::CONTENT_TYPE, "application/json")
