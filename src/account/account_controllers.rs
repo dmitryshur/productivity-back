@@ -2,6 +2,7 @@ use crate::account::account_models::AccountDbExecutor;
 use crate::common::responses::ServerResponse;
 use crate::common::validators::{ValidationErrors, Validator};
 use crate::AppState;
+use crate::DbErrors;
 use actix_web::{self, cookie, dev, error, http, web};
 use redis::{AsyncCommands, RedisError};
 use serde::{Deserialize, Serialize};
@@ -148,11 +149,14 @@ pub async fn account_register(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            match err.code() {
-                None => Err(AccountRegistrationErrors::Server),
-                Some(err) => match err.code() {
-                    "23505" => Err(AccountRegistrationErrors::EmailExists),
-                    _ => Err(AccountRegistrationErrors::Db),
+            match err {
+                DbErrors::Runtime => Err(AccountRegistrationErrors::Server),
+                DbErrors::Postgres(err) => match err.code() {
+                    None => Err(AccountRegistrationErrors::Db),
+                    Some(code) => match code.code() {
+                        "23505" => Err(AccountRegistrationErrors::EmailExists),
+                        _ => Err(AccountRegistrationErrors::Db),
+                    },
                 },
             }
         }

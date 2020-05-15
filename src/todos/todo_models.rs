@@ -1,3 +1,4 @@
+use crate::DbErrors;
 use chrono::prelude::*;
 use deadpool_postgres::Pool;
 use postgres::types::ToSql;
@@ -40,7 +41,7 @@ impl Todo {
 pub struct TodoDbExecutor;
 
 impl TodoDbExecutor {
-    pub async fn create(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+    pub async fn create(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, DbErrors> {
         let mut db_client = db_pool.get().await.unwrap();
         let transaction = db_client.transaction().await?;
         let rows = transaction
@@ -57,7 +58,7 @@ impl TodoDbExecutor {
         Ok(rows)
     }
 
-    pub async fn get(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+    pub async fn get(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, DbErrors> {
         let mut db_client = db_pool.get().await.unwrap();
         let transaction = db_client.transaction().await?;
         let rows = transaction
@@ -78,7 +79,7 @@ impl TodoDbExecutor {
         Ok(rows)
     }
 
-    pub async fn edit(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+    pub async fn edit(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, DbErrors> {
         let mut db_client = db_pool.get().await.unwrap();
         let transaction = db_client.transaction().await?;
         let rows = transaction
@@ -99,7 +100,7 @@ impl TodoDbExecutor {
         Ok(rows)
     }
 
-    pub async fn delete(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+    pub async fn delete(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, DbErrors> {
         let mut db_client = db_pool.get().await.unwrap();
         let transaction = db_client.transaction().await?;
         let rows = transaction
@@ -116,7 +117,7 @@ impl TodoDbExecutor {
         Ok(rows)
     }
 
-    pub async fn reset(db_pool: &Pool) -> Result<(), postgres::Error> {
+    pub async fn reset(db_pool: &Pool) -> Result<(), DbErrors> {
         let mut db_client = db_pool.get().await.unwrap();
         let transaction = db_client.transaction().await?;
         let _rows = transaction.execute("DELETE FROM todo", &[]).await?;

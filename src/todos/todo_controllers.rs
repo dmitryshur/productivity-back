@@ -1,6 +1,7 @@
 use crate::common::responses::ServerResponse;
 use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
+use crate::DbErrors;
 use actix_http::httpmessage::HttpMessage;
 use actix_web::{self, dev, error, http, web, HttpRequest};
 use chrono::prelude::*;
@@ -114,7 +115,10 @@ pub async fn todo_create(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            return Err(TodoErrors::Db(err));
+            match err {
+                DbErrors::Runtime => Err(TodoErrors::Server),
+                DbErrors::Postgres(err) => Err(TodoErrors::Db(err)),
+            }
         }
     }
 }
@@ -151,7 +155,10 @@ pub async fn todo_get(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            return Err(TodoErrors::Db(err));
+            match err {
+                DbErrors::Runtime => Err(TodoErrors::Server),
+                DbErrors::Postgres(err) => Err(TodoErrors::Db(err)),
+            }
         }
     }
 }
@@ -199,7 +206,10 @@ pub async fn todo_edit(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            return Err(TodoErrors::Db(err));
+            match err {
+                DbErrors::Runtime => Err(TodoErrors::Server),
+                DbErrors::Postgres(err) => Err(TodoErrors::Db(err)),
+            }
         }
     }
 }
@@ -223,7 +233,10 @@ pub async fn todo_delete(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            return Err(TodoErrors::Db(err));
+            match err {
+                DbErrors::Runtime => Err(TodoErrors::Server),
+                DbErrors::Postgres(err) => Err(TodoErrors::Db(err)),
+            }
         }
     }
 }
@@ -235,7 +248,10 @@ pub async fn todo_reset(state: web::Data<AppState>) -> actix_web::Result<actix_w
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            return Err(TodoErrors::Server);
+            match err {
+                DbErrors::Runtime => Err(TodoErrors::Server),
+                DbErrors::Postgres(err) => Err(TodoErrors::Db(err)),
+            }
         }
     }
 }
