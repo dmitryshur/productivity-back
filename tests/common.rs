@@ -1,14 +1,13 @@
 use actix_http::{body::MessageBody, http::header::HeaderMap};
 use actix_web::{dev::ServiceResponse, test, web};
-use postgres;
+use deadpool_postgres::{config::ConfigError, Config, Pool};
 use productivity::{account::account_controllers, middlewares, todos::todo_controllers};
-use r2d2;
-use r2d2_postgres::PostgresConnectionManager;
 use redis;
 use redis::ConnectionLike;
 use regex::Regex;
 use serde_json::Value;
 use std::{sync::mpsc, thread, time::Duration};
+use tokio_postgres::NoTls;
 
 #[cfg(test)]
 pub fn test_config_app(config: &mut web::ServiceConfig) {
@@ -30,21 +29,22 @@ pub fn test_config_app(config: &mut web::ServiceConfig) {
         );
 }
 
-pub fn create_db_pool() -> Result<r2d2::Pool<PostgresConnectionManager<postgres::NoTls>>, r2d2::Error> {
+pub fn create_db_pool() -> Result<Pool, ConfigError> {
     let host = std::env::var("POSTGRES_HOST").expect("POSTGRES_HOST variable missing");
     let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER variable missing");
     let db = std::env::var("POSTGRES_DB").expect("POSTGRES_DB variable missing");
     let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD variable missing");
 
     panic_after(Duration::from_secs(5), "DB timeout", move || {
-        let db_manager = PostgresConnectionManager::new(
-            format!("host={} user={} dbname={} password={}", host, user, db, password)
-                .parse()
-                .unwrap(),
-            postgres::NoTls,
-        );
-
-        r2d2::Pool::new(db_manager)
+        let default = Config::default();
+        let cfg = Config {
+            host: Some(host),
+            user: Some(user),
+            password: Some(password),
+            dbname: Some(db),
+            ..default
+        };
+        cfg.create_pool(NoTls)
     })
 }
 

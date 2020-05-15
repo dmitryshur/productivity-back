@@ -2,8 +2,7 @@
 extern crate log;
 
 use actix_web::{middleware, web, App, HttpServer};
-use deadpool_postgres::config::ConfigError;
-use deadpool_postgres::{Config, Pool};
+use deadpool_postgres::{config::ConfigError, Config, Pool};
 use productivity::account::account_controllers::{account_login, account_register};
 use productivity::todos::todo_controllers::{todo_create, todo_delete, todo_edit, todo_get};
 use productivity::{middlewares, AppState};
@@ -15,7 +14,6 @@ use tokio_postgres::NoTls;
 fn create_db_pool() -> Result<Pool, ConfigError> {
     let host = std::env::var("POSTGRES_HOST").expect("POSTGRES_HOST variable missing");
     let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER variable missing");
-
     let db = std::env::var("POSTGRES_DB").expect("POSTGRES_DB variable missing");
     let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD variable missing");
 

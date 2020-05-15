@@ -10,8 +10,8 @@ mod tests {
     use actix_rt;
     use actix_service::Service;
     use actix_web::{http, test, App};
+    use deadpool_postgres::Pool;
     use productivity::AppState;
-    use r2d2::Pool;
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
