@@ -1,4 +1,3 @@
-use crate::account::account_models::DbErrors;
 use crate::common::responses::ServerResponse;
 use crate::todos::todo_models::{Todo, TodoDbExecutor};
 use crate::AppState;
@@ -93,17 +92,13 @@ pub async fn todo_create(
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
     let account_id = request.cookie("account_id").unwrap().value().parse::<i32>().unwrap();
-    let pool = state.db_pool.clone();
-    let rows = web::block(move || {
-        let connection = pool.get().unwrap();
-        let current_date = Utc::now();
-        TodoDbExecutor::new(connection).create(&[&account_id, &body.title, &body.body, &current_date, &current_date])
-    })
-    .await
-    .map_err(|e| match e {
-        error::BlockingError::Error(e) => DbErrors::Postgres(e),
-        error::BlockingError::Canceled => DbErrors::Runtime,
-    });
+
+    let current_date = Utc::now();
+    let rows = TodoDbExecutor::create(
+        &state.db_pool,
+        &[&account_id, &body.title, &body.body, &current_date, &current_date],
+    )
+    .await;
 
     match rows {
         Ok(rows) => {
@@ -119,10 +114,7 @@ pub async fn todo_create(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            match err {
-                DbErrors::Postgres(e) => Err(TodoErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoErrors::Server),
-            }
+            return Err(TodoErrors::Db(err));
         }
     }
 }
@@ -133,17 +125,8 @@ pub async fn todo_get(
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
     let account_id = request.cookie("account_id").unwrap().value().parse::<i32>().unwrap();
-    let pool = state.db_pool.clone();
-    let rows = web::block(move || {
-        let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).get(&[&account_id, &query.offset, &query.limit])
-    })
-    .await
-    .map_err(|e| match e {
-        error::BlockingError::Error(e) => DbErrors::Postgres(e),
-        error::BlockingError::Canceled => DbErrors::Runtime,
-    });
 
+    let rows = TodoDbExecutor::get(&state.db_pool, &[&account_id, &query.offset, &query.limit]).await;
     match rows {
         Ok(rows) => {
             let todos: Vec<Todo> = rows
@@ -168,10 +151,7 @@ pub async fn todo_get(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            match err {
-                DbErrors::Postgres(e) => Err(TodoErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoErrors::Server),
-            }
+            return Err(TodoErrors::Db(err));
         }
     }
 }
@@ -181,28 +161,22 @@ pub async fn todo_edit(
     body: web::Json<TodoEditRequest>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
-    println!("test1");
     let account_id = request.cookie("account_id").unwrap().value().parse::<i32>().unwrap();
-    let pool = state.db_pool.clone();
     let todo_id = body.id;
+    let current_date = Utc::now();
 
-    let rows = web::block(move || {
-        let connection = pool.get().unwrap();
-        let current_date = Utc::now();
-        TodoDbExecutor::new(connection).edit(&[
+    let rows = TodoDbExecutor::edit(
+        &state.db_pool,
+        &[
             &body.title,
             &body.body,
             &body.done,
             &current_date,
             &account_id,
             &body.id,
-        ])
-    })
-    .await
-    .map_err(|e| match e {
-        error::BlockingError::Error(e) => DbErrors::Postgres(e),
-        error::BlockingError::Canceled => DbErrors::Runtime,
-    });
+        ],
+    )
+    .await;
 
     match rows {
         Ok(rows) => {
@@ -225,10 +199,7 @@ pub async fn todo_edit(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            match err {
-                DbErrors::Postgres(e) => Err(TodoErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoErrors::Server),
-            }
+            return Err(TodoErrors::Db(err));
         }
     }
 }
@@ -239,17 +210,8 @@ pub async fn todo_delete(
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
     let account_id = request.cookie("account_id").unwrap().value().parse::<i32>().unwrap();
-    let pool = state.db_pool.clone();
-    let rows = web::block(move || {
-        let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).delete(&[&account_id, &body.todos])
-    })
-    .await
-    .map_err(|e| match e {
-        error::BlockingError::Error(e) => DbErrors::Postgres(e),
-        error::BlockingError::Canceled => DbErrors::Runtime,
-    });
 
+    let rows = TodoDbExecutor::delete(&state.db_pool, &[&account_id, &body.todos]).await;
     match rows {
         Ok(rows) => {
             let todo_ids: Vec<i32> = rows.iter().map(|row| row.get("id")).collect();
@@ -261,35 +223,19 @@ pub async fn todo_delete(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            match err {
-                DbErrors::Postgres(e) => Err(TodoErrors::Db(e)),
-                DbErrors::Runtime => Err(TodoErrors::Server),
-            }
+            return Err(TodoErrors::Db(err));
         }
     }
 }
 
 pub async fn todo_reset(state: web::Data<AppState>) -> actix_web::Result<actix_web::HttpResponse, TodoErrors> {
-    let pool = state.db_pool.clone();
-    let result = web::block(move || {
-        let connection = pool.get().unwrap();
-        TodoDbExecutor::new(connection).reset()
-    })
-    .await
-    .map_err(|e| match e {
-        error::BlockingError::Error(e) => DbErrors::Postgres(e),
-        error::BlockingError::Canceled => DbErrors::Runtime,
-    });
-
+    let result = TodoDbExecutor::reset(&state.db_pool).await;
     match result {
         Ok(_) => Ok(actix_web::HttpResponse::Ok().finish()),
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            return match err {
-                DbErrors::Runtime => Err(TodoErrors::Server),
-                DbErrors::Postgres(_err) => Err(TodoErrors::Server),
-            };
+            return Err(TodoErrors::Server);
         }
     }
 }

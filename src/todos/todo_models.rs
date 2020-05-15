@@ -1,8 +1,7 @@
 use chrono::prelude::*;
+use deadpool_postgres::Pool;
 use postgres::types::ToSql;
-use postgres::{self, NoTls, Row};
-use r2d2::PooledConnection;
-use r2d2_postgres::PostgresConnectionManager;
+use postgres::{self, Row};
 use serde::Serialize;
 
 #[derive(Serialize, Debug)]
@@ -38,33 +37,32 @@ impl Todo {
     }
 }
 
-pub struct TodoDbExecutor {
-    connection: PooledConnection<PostgresConnectionManager<NoTls>>,
-}
+pub struct TodoDbExecutor;
 
 impl TodoDbExecutor {
-    pub fn new(connection: PooledConnection<PostgresConnectionManager<NoTls>>) -> Self {
-        TodoDbExecutor { connection }
-    }
-
-    pub fn create(&mut self, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
-        let mut transaction = self.connection.transaction()?;
-        let rows = transaction.query(
-            "
+    pub async fn create(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+        let mut db_client = db_pool.get().await.unwrap();
+        let transaction = db_client.transaction().await?;
+        let rows = transaction
+            .query(
+                "
             INSERT INTO todo(account_id, title, body, creation_date, last_edit_date)
             VALUES($1, $2, $3, $4, $5)
             RETURNING id, creation_date",
-            params,
-        )?;
-        transaction.commit()?;
+                params,
+            )
+            .await?;
+        transaction.commit().await?;
 
         Ok(rows)
     }
 
-    pub fn get(&mut self, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
-        let mut transaction = self.connection.transaction()?;
-        let rows = transaction.query(
-            "
+    pub async fn get(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+        let mut db_client = db_pool.get().await.unwrap();
+        let transaction = db_client.transaction().await?;
+        let rows = transaction
+            .query(
+                "
             SELECT
                 id, account_id, title, body, creation_date, last_edit_date, done
             FROM todo
@@ -72,17 +70,20 @@ impl TodoDbExecutor {
             ORDER BY last_edit_date DESC
             OFFSET $2
             LIMIT $3",
-            params,
-        )?;
-        transaction.commit()?;
+                params,
+            )
+            .await?;
+        transaction.commit().await?;
 
         Ok(rows)
     }
 
-    pub fn edit(&mut self, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
-        let mut transaction = self.connection.transaction()?;
-        let rows = transaction.query(
-            "
+    pub async fn edit(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+        let mut db_client = db_pool.get().await.unwrap();
+        let transaction = db_client.transaction().await?;
+        let rows = transaction
+            .query(
+                "
             UPDATE todo
             SET title = COALESCE($1, title),
                 body = COALESCE($2, body),
@@ -90,31 +91,36 @@ impl TodoDbExecutor {
                 last_edit_date = $4
             WHERE account_id = $5 AND id = $6
             RETURNING id, last_edit_date",
-            params,
-        )?;
-        transaction.commit()?;
+                params,
+            )
+            .await?;
+        transaction.commit().await?;
 
         Ok(rows)
     }
 
-    pub fn delete(&mut self, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
-        let mut transaction = self.connection.transaction()?;
-        let rows = transaction.query(
-            "
+    pub async fn delete(db_pool: &Pool, params: &[&(dyn ToSql + Sync)]) -> Result<Vec<Row>, postgres::Error> {
+        let mut db_client = db_pool.get().await.unwrap();
+        let transaction = db_client.transaction().await?;
+        let rows = transaction
+            .query(
+                "
             DELETE FROM todo
             WHERE account_id = $1 AND id = ANY($2)
             RETURNING id",
-            params,
-        )?;
-        transaction.commit()?;
+                params,
+            )
+            .await?;
+        transaction.commit().await?;
 
         Ok(rows)
     }
 
-    pub fn reset(&mut self) -> Result<(), postgres::Error> {
-        let mut transaction = self.connection.transaction()?;
-        let _rows = transaction.execute("DELETE FROM todo", &[])?;
-        transaction.commit()?;
+    pub async fn reset(db_pool: &Pool) -> Result<(), postgres::Error> {
+        let mut db_client = db_pool.get().await.unwrap();
+        let transaction = db_client.transaction().await?;
+        let _rows = transaction.execute("DELETE FROM todo", &[]).await?;
+        transaction.commit().await?;
 
         Ok(())
     }

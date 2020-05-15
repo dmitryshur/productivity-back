@@ -1,4 +1,4 @@
-use crate::account::account_models::{AccountDbExecutor, DbErrors};
+use crate::account::account_models::AccountDbExecutor;
 use crate::common::responses::ServerResponse;
 use crate::common::validators::{ValidationErrors, Validator};
 use crate::AppState;
@@ -138,16 +138,7 @@ pub async fn account_register(
     Validator::email(&body.email)?;
     Validator::password(&body.password)?;
 
-    let pool = state.db_pool.clone();
-    let rows_count = web::block(move || {
-        let connection = pool.get().unwrap();
-        AccountDbExecutor::new(connection).register(&[&body.email, &body.password])
-    })
-    .await
-    .map_err(|e| match e {
-        error::BlockingError::Error(e) => DbErrors::Postgres(e),
-        error::BlockingError::Canceled => DbErrors::Runtime,
-    });
+    let rows_count = AccountDbExecutor::register(&state.db_pool, &[&body.email, &body.password]).await;
 
     match rows_count {
         Ok(_count) => {
@@ -157,9 +148,9 @@ pub async fn account_register(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            match err {
-                DbErrors::Runtime => Err(AccountRegistrationErrors::Server),
-                DbErrors::Postgres(e) => match e.code().unwrap().code() {
+            match err.code() {
+                None => Err(AccountRegistrationErrors::Server),
+                Some(err) => match err.code() {
                     "23505" => Err(AccountRegistrationErrors::EmailExists),
                     _ => Err(AccountRegistrationErrors::Db),
                 },
@@ -175,17 +166,7 @@ pub async fn account_login(
     Validator::email(&body.email)?;
     Validator::password(&body.password)?;
 
-    let pool = state.db_pool.clone();
-    let rows = web::block(move || {
-        let connection = pool.get().unwrap();
-        AccountDbExecutor::new(connection).login(&[&body.email, &body.password])
-    })
-    .await
-    .map_err(|e| match e {
-        error::BlockingError::Error(e) => DbErrors::Postgres(e),
-        error::BlockingError::Canceled => DbErrors::Runtime,
-    });
-
+    let rows = AccountDbExecutor::login(&state.db_pool, &[&body.email, &body.password]).await;
     match rows {
         Ok(rows) => {
             if rows.is_empty() {
@@ -211,10 +192,7 @@ pub async fn account_login(
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            return match err {
-                DbErrors::Runtime => Err(AccountLoginErrors::Server),
-                DbErrors::Postgres(_err) => Err(AccountLoginErrors::Server),
-            };
+            return Err(AccountLoginErrors::Server);
         }
     }
 }
@@ -222,26 +200,14 @@ pub async fn account_login(
 pub async fn accounts_reset(
     state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse, AccountLoginErrors> {
-    let pool = state.db_pool.clone();
-    let result = web::block(move || {
-        let connection = pool.get().unwrap();
-        AccountDbExecutor::new(connection).reset()
-    })
-    .await
-    .map_err(|e| match e {
-        error::BlockingError::Error(e) => DbErrors::Postgres(e),
-        error::BlockingError::Canceled => DbErrors::Runtime,
-    });
+    let result = AccountDbExecutor::reset(&state.db_pool).await;
 
     match result {
         Ok(_) => Ok(actix_web::HttpResponse::Ok().finish()),
         Err(err) => {
             warn!(target: "warnings", "Warn: {:?}", err);
 
-            return match err {
-                DbErrors::Runtime => Err(AccountLoginErrors::Server),
-                DbErrors::Postgres(_err) => Err(AccountLoginErrors::Server),
-            };
+            return Err(AccountLoginErrors::Server);
         }
     }
 }
