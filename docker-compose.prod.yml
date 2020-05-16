@@ -1,7 +1,16 @@
 version: '3.7'
 
 services:
+  nginx:
+    image: nginx:1.18.0
+    volumes:
+    - ./nginx:/etc/nginx/conf.d
+    ports:
+      - 80:80
+    depends_on:
+      - productivity_back
   productivity_back:
+    container_name: productivity_back
     image: registry.gitlab.com/dimashur/productivity:latest
     env_file:
       - PROD_ENV

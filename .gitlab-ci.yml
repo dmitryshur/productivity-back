@@ -35,5 +35,5 @@ deploy:
     - ssh-keyscan -H $DEPLOYMENT_SERVER_IP >> ~/.ssh/known_hosts
 
   script:
-    - scp -r ./docker-compose.prod.yml $PROD_ENV root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity
-    - ssh root@$DEPLOYMENT_SERVER_IP "cd /usr/src/productivity; export $(cat PROD_ENV | xargs); docker login -u dimashur -p ${ACCESS_TOKEN} ${CI_REGISTRY}; docker-compose -f docker-compose.prod.yml stop; docker-compose -f docker-compose.prod.yml rm productivity_back --force; docker pull ${CI_REGISTRY}/dimashur/productivity:latest; docker-compose -f docker-compose.prod.yml up -d"
+    - scp -r ./docker-compose.prod.yml $PROD_ENV db nginx root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity
+    - ssh root@$DEPLOYMENT_SERVER_IP "cd /usr/src/productivity; export $(cat $PROD_ENV | xargs); docker login -u dimashur -p ${ACCESS_TOKEN} ${CI_REGISTRY}; docker-compose -f docker-compose.prod.yml stop; docker-compose -f docker-compose.prod.yml rm productivity_back --force; docker pull ${CI_REGISTRY}/dimashur/productivity:latest; docker-compose -f docker-compose.prod.yml up -d"
