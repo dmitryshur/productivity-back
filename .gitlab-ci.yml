@@ -21,11 +21,14 @@ build:
   after_script:
     - docker logout $CI_REGISTRY
   script:
-    - docker build -t $CI_REGISTRY/dimashur/productivity:latest --target production .
-    - docker push $CI_REGISTRY/dimashur/productivity:latest
+    - docker build -t $CI_REGISTRY/dimashur/productivity:${CI_COMMIT_REF_SLUG} --target production .
+    - docker push $CI_REGISTRY/dimashur/productivity:${CI_COMMIT_REF_SLUG}
 
 deploy:
   stage: deploy
+  when: manual
+  only:
+    - master
   before_script:
     - mkdir -p ~/.ssh
     - echo "$DEPLOY_SERVER_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
@@ -35,5 +38,9 @@ deploy:
     - ssh-keyscan -H $DEPLOYMENT_SERVER_IP >> ~/.ssh/known_hosts
 
   script:
-    - scp -r ./docker-compose.prod.yml $PROD_ENV db nginx root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity
-    - ssh root@$DEPLOYMENT_SERVER_IP "cd /usr/src/productivity; export $(cat $PROD_ENV | xargs); docker login -u dimashur -p ${ACCESS_TOKEN} ${CI_REGISTRY}; docker-compose -f docker-compose.prod.yml stop; docker-compose -f docker-compose.prod.yml rm productivity_back --force; docker pull ${CI_REGISTRY}/dimashur/productivity:latest; docker-compose -f docker-compose.prod.yml up -d"
+    - printf "\nCI_COMMIT_REF_SLUG=$CI_COMMIT_REF_SLUG" >> $PROD_ENV
+    - touch env
+    - cat $PROD_ENV > env
+    - scp -r ./docker-compose.prod.yml db env nginx root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity
+    - ssh root@$DEPLOYMENT_SERVER_IP "cd /usr/src/productivity; export $(cat env | xargs); docker login -u dimashur -p ${ACCESS_TOKEN} ${CI_REGISTRY}; docker-compose -f docker-compose.prod.yml stop; docker-compose -f docker-compose.prod.yml rm productivity_back --force; docker pull ${CI_REGISTRY}/dimashur/productivity:latest; docker-compose -f docker-compose.prod.yml up -d"
+    - rm env
