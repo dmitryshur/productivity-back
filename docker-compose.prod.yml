@@ -20,7 +20,7 @@ services:
     image: postgres:12.2
     container_name: postgres
     volumes:
-      - postgres_productivity:/var/lib/postgresql/data
+      - ${DB_VOLUME}:/var/lib/postgresql/data
       - ./db:/docker-entrypoint-initdb.d
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -32,3 +32,4 @@ services:
 
 volumes:
   postgres_productivity:
+  postgres_productivity_test:
