@@ -13,7 +13,7 @@ services:
     container_name: productivity_back
     image: registry.gitlab.com/dimashur/productivity:${CI_COMMIT_REF_SLUG}
     env_file:
-      - PROD_ENV
+      - env
     depends_on:
       - postgres
   postgres:
