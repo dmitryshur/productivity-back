@@ -1,20 +1,14 @@
 version: '3.7'
 
 services:
-  nginx:
-    image: nginx:1.18.0
-    volumes:
-    - ./nginx:/etc/nginx/conf.d
-    ports:
-      - ${NGINX_HOST_PORT}:80
-    depends_on:
-      - productivity_back
   productivity_back:
     image: registry.gitlab.com/dimashur/productivity:${CI_COMMIT_REF_SLUG}
     env_file:
       - env
     depends_on:
       - postgres
+    networks:
+      - node_productivity
   postgres:
     image: postgres:12.2
     volumes:
@@ -24,9 +18,18 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: productivity
+    networks:
+      - node_productivity
   redis:
     image: redis:5.0.8
+    networks:
+      - node_productivity
 
 volumes:
   postgres_productivity:
   postgres_productivity_test:
+
+networks:
+  productivity_network:
+    external:
+      name: productivity
