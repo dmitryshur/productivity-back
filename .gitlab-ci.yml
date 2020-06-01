@@ -56,7 +56,7 @@ review:
         && cd /usr/src/nginx/conf/locations
         && touch tmp
         && docker ps --filter ancestor=$CI_REGISTRY/dimashur/productivity:$CI_COMMIT_REF_SLUG --format '{{.ID}}' > tmp
-        && cat tmp | xargs printf 'location = /$CI_COMMIT_REF_SLUG { rewrite /$CI_COMMIT_REF_SLUG(.*) /$1 break; proxy_pass http://%s:8080; }' > productivity-$CI_COMMIT_REF_SLUG.conf
+        && cat tmp | xargs printf 'location /$CI_COMMIT_REF_SLUG { rewrite /$CI_COMMIT_REF_SLUG/(.*) /\$1 break; proxy_pass http://%s:8080; }' > productivity-$CI_COMMIT_REF_SLUG.conf
         && rm tmp
         && cd /usr/src/nginx
         && docker-compose down
