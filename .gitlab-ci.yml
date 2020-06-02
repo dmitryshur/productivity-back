@@ -17,6 +17,8 @@ test:
 
 build:
   stage: build
+  variables:
+    CARGO_HOME: ./.cargo
   before_script:
     - docker login -u dimashur -p $ACCESS_TOKEN $CI_REGISTRY
   after_script:
@@ -40,13 +42,64 @@ review:
     - ssh-keyscan -H $DEPLOYMENT_SERVER_IP >> ~/.ssh/known_hosts
   script:
     - printf "\nCI_COMMIT_REF_SLUG=$CI_COMMIT_REF_SLUG" >> $PROD_ENV
-    - printf "\nNGINX_HOST_PORT=0" >> $PROD_ENV
     - printf "\nDB_VOLUME=postgres_productivity_test" >> $PROD_ENV
     - touch env
     - cat $PROD_ENV > env
-    - rsync -r ./docker-compose.prod.yml db env nginx root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity/$CI_COMMIT_REF_SLUG
-    - ssh root@$DEPLOYMENT_SERVER_IP "cd /usr/src/productivity/$CI_COMMIT_REF_SLUG; export $(cat env | xargs); docker login -u dimashur -p ${ACCESS_TOKEN} ${CI_REGISTRY}; docker-compose -f docker-compose.prod.yml stop; docker-compose -f docker-compose.prod.yml rm productivity_back --force; docker pull ${CI_REGISTRY}/dimashur/productivity:latest; docker-compose -f docker-compose.prod.yml up -d; docker container ls | grep $CI_COMMIT_REF_SLUG"
+    - rsync -r ./docker-compose.prod.yml db env root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity/$CI_COMMIT_REF_SLUG
+    - ssh root@$DEPLOYMENT_SERVER_IP "
+        cd /usr/src/productivity/$CI_COMMIT_REF_SLUG
+        && export $(cat env | xargs)
+        && docker login -u dimashur -p ${ACCESS_TOKEN} ${CI_REGISTRY}
+        && docker-compose -f docker-compose.prod.yml down
+        && docker pull ${CI_REGISTRY}/dimashur/productivity:${CI_COMMIT_REF_SLUG}
+        && docker-compose -f docker-compose.prod.yml up -d
+        && cd /usr/src/nginx/conf/locations
+        && touch tmp
+        && docker ps --filter ancestor=$CI_REGISTRY/dimashur/productivity:$CI_COMMIT_REF_SLUG --format '{{.ID}}' > tmp
+        && cat tmp | xargs printf 'location /productivity/$CI_COMMIT_REF_SLUG { rewrite /productivity/$CI_COMMIT_REF_SLUG/(.*) /\$1 break; proxy_pass http://%s:8080; }' > productivity-$CI_COMMIT_REF_SLUG.conf
+        && rm tmp
+        && cd /usr/src/nginx
+        && docker-compose down
+        && docker-compose up -d
+      "
     - rm env
+
+stop_review:
+  stage: review
+  when: manual
+  only:
+    - branches
+  before_script:
+    - mkdir -p ~/.ssh
+    - echo "$ENVIR"
+    - cat $ENVIR
+    - echo "$DEPLOY_SERVER_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - eval "$(ssh-agent -s)"
+    - ssh-add ~/.ssh/id_rsa
+    - ssh-keyscan -H $DEPLOYMENT_SERVER_IP >> ~/.ssh/known_hosts
+  script:
+    - printf "\nCI_COMMIT_REF_SLUG=$CI_COMMIT_REF_SLUG" >> $PROD_ENV
+    - printf "\nDB_VOLUME=postgres_productivity_test" >> $PROD_ENV
+    - cat $PROD_ENV
+    - touch env
+    - cat $PROD_ENV > env
+    - rsync -r env root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity/$CI_COMMIT_REF_SLUG
+    - ssh root@$DEPLOYMENT_SERVER_IP "
+      cd /usr/src/productivity/$CI_COMMIT_REF_SLUG
+      && export $(cat env | xargs)
+      && docker-compose -f docker-compose.prod.yml down
+      && cd ..
+      && rm -rf $CI_COMMIT_REF_SLUG
+      && cd /usr/src/nginx/conf/locations
+      && rm productivity-$CI_COMMIT_REF_SLUG.conf
+      && cd /usr/src/nginx
+      && docker-compose down
+      && docker-compose up -d
+      "
+    - rm env
+  except:
+    - master
 
 deploy:
   stage: deploy
@@ -62,10 +115,24 @@ deploy:
     - ssh-keyscan -H $DEPLOYMENT_SERVER_IP >> ~/.ssh/known_hosts
   script:
     - printf "\nCI_COMMIT_REF_SLUG=$CI_COMMIT_REF_SLUG" >> $PROD_ENV
-    - printf "\nNGINX_HOST_PORT=80" >> $PROD_ENV
     - printf "\nDB_VOLUME=postgres_productivity" >> $PROD_ENV
     - touch env
     - cat $PROD_ENV > env
-    - rsync -r ./docker-compose.prod.yml db env nginx root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity/$CI_COMMIT_REF_SLUG
-    - ssh root@$DEPLOYMENT_SERVER_IP "cd /usr/src/productivity/$CI_COMMIT_REF_SLUG; export $(cat env | xargs); docker login -u dimashur -p ${ACCESS_TOKEN} ${CI_REGISTRY}; docker-compose -f docker-compose.prod.yml stop; docker-compose -f docker-compose.prod.yml rm productivity_back --force; docker pull ${CI_REGISTRY}/dimashur/productivity:latest; docker-compose -f docker-compose.prod.yml up -d"
+    - rsync -r ./docker-compose.prod.yml db env root@${DEPLOYMENT_SERVER_IP}:/usr/src/productivity/$CI_COMMIT_REF_SLUG
+    - ssh root@$DEPLOYMENT_SERVER_IP "
+      cd /usr/src/productivity/$CI_COMMIT_REF_SLUG
+      && export $(cat env | xargs)
+      && docker login -u dimashur -p ${ACCESS_TOKEN} ${CI_REGISTRY}
+      && docker-compose -f docker-compose.prod.yml down
+      && docker pull ${CI_REGISTRY}/dimashur/productivity:${CI_COMMIT_REF_SLUG}
+      && docker-compose -f docker-compose.prod.yml up -d
+      && cd /usr/src/nginx/conf/locations
+      && touch tmp
+      && docker ps --filter ancestor=$CI_REGISTRY/dimashur/productivity:$CI_COMMIT_REF_SLUG --format '{{.ID}}' > tmp
+      && cat tmp | xargs printf 'location /productivity { rewrite /productivity/(.*) /\$1 break; proxy_pass http://%s:8080; }' > productivity-$CI_COMMIT_REF_SLUG.conf
+      && rm tmp
+      && cd /usr/src/nginx
+      && docker-compose down
+      && docker-compose up -d
+      "
     - rm env
